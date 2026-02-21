@@ -1,0 +1,21 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    font-family: "Plus Jakarta Sans", "Inter", "Segoe UI", sans-serif;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: "JetBrains Mono", "Consolas", "Menlo", monospace;
+  }
+}
