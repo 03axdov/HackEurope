@@ -1,39 +1,29 @@
-import "./otel"; // must be first — registers PrismaInstrumentation before PrismaClient is created
+import { wrapExpressApp } from "./otel"; // must be first — registers PrismaInstrumentation before PrismaClient is created
 import express, { Request, Response } from "express";
 import { trace } from "@opentelemetry/api";
 import { prisma } from "./lib/prisma";
+import { tracer } from "./tracer";
 
 const app = express();
+wrapExpressApp(app);
 const port = 4000;
 
-const tracer = trace.getTracer("Application");
-
 app.get("/", async (_req: Request, res: Response) => {
-  await tracer.startActiveSpan("simple-query", async (span) => {
-    try {
-      await prisma.user.create({
-        data: {
-          id: Math.floor(Math.random() * 1000000),
-          name: 'John Doe',
-          email: `john.doe${Math.floor(Math.random() * 1000000)}@example.com`,
-          posts: {
-            create: {
-              title: 'Post 1',
-              content: 'Content 1',
-            },
-          },
+  await prisma.user.create({
+    data: {
+      id: Math.floor(Math.random() * 1000000),
+      name: "John Doe",
+      email: `john.doe${Math.floor(Math.random() * 1000000)}@example.com`,
+      posts: {
+        create: {
+          title: "Post 1",
+          content: "Content 1",
         },
-      });
-      let users = await prisma.user.findMany();
-      res.status(200).json(users);
-      span.setAttribute("http.status", 200);
-    } catch (e) {
-      span.setAttribute("http.status", 500);
-      res.status(500).json({ error: 500, details: e });
-    } finally {
-      span.end();
-    }
+      },
+    },
   });
+  let users = await prisma.user.findMany();
+  res.status(200).json(users);
 });
 
 app.get("/many", async (_req: Request, res: Response) => {
@@ -59,7 +49,7 @@ app.get("/many", async (_req: Request, res: Response) => {
       await tracer.startActiveSpan("upsert", async (span) => {
         try {
           await prisma.user.upsert({
-            create: { name: "bob", id: 6, email: 'bob@example.com' },
+            create: { name: "bob", id: 6, email: "bob@example.com" },
             update: { name: "hello - bob" },
             where: { id: 6 },
           });
