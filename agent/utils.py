@@ -4,12 +4,19 @@ import requests
 import os
 import stat
 import time
+import re
 
 
 def sh(cwd: Path, *cmd: str, timeout: int = 120) -> str:
     try:
         p = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
         )
         return f"$ {' '.join(cmd)}\n(exit {p.returncode})\nSTDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}"
     except FileNotFoundError as e:
@@ -71,3 +78,40 @@ def _on_rm_error(func, path, exc_info):
         time.sleep(0.2)
         os.chmod(path, stat.S_IWRITE)
         func(path)
+
+
+def _stdout(cmd_output: str) -> str:
+    marker = "STDOUT:\n"
+    err_marker = "\nSTDERR:\n"
+    if marker not in cmd_output:
+        return ""
+    body = cmd_output.split(marker, 1)[1]
+    return body.split(err_marker, 1)[0]
+
+
+EXIT_RE = re.compile(r"\(exit (-?\d+)\)")
+def _exit_code(cmd_output: str) -> int:
+    m = EXIT_RE.search(cmd_output)
+    return int(m.group(1)) if m else -1
+
+
+def _run_or_raise(cwd: Path, *cmd: str, timeout: int = 120) -> str:
+    out = sh(cwd, *cmd, timeout=timeout)
+    print(out)
+    code = _exit_code(out)
+    if code != 0:
+        raise RuntimeError(f"Command failed ({code}): {' '.join(cmd)}")
+    return out
+
+
+def _looks_like_confirmation_request(cmd_output: str) -> bool:
+    text = _stdout(cmd_output).lower()
+    cues = (
+        "would you like me to",
+        "would you like me",
+        "should i apply",
+        "should i make",
+        "do you want me to",
+        "want me to apply",
+    )
+    return any(cue in text for cue in cues)

@@ -4,10 +4,10 @@ import shlex
 import shutil
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import urlparse
 from dotenv import load_dotenv
 
-from utils import sh, _on_rm_error, create_pr
+from utils import _run_or_raise, _stdout, create_pr, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
+from git_interactions import _has_uncommitted_changes, _ahead_commit_count, _owner_repo_from_url
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -16,31 +16,6 @@ load_dotenv(ROOT_DIR / ".env")
 api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
 if not api_key:
     raise RuntimeError("Missing API key. Set ANTHROPIC_API_KEY (or CLAUDE_API_KEY) in .env.")
-
-EXIT_RE = re.compile(r"\(exit (-?\d+)\)")
-
-
-def _exit_code(cmd_output: str) -> int:
-    m = EXIT_RE.search(cmd_output)
-    return int(m.group(1)) if m else -1
-
-
-def _stdout(cmd_output: str) -> str:
-    marker = "STDOUT:\n"
-    err_marker = "\nSTDERR:\n"
-    if marker not in cmd_output:
-        return ""
-    body = cmd_output.split(marker, 1)[1]
-    return body.split(err_marker, 1)[0]
-
-
-def _run_or_raise(cwd: Path, *cmd: str, timeout: int = 120) -> str:
-    out = sh(cwd, *cmd, timeout=timeout)
-    print(out)
-    code = _exit_code(out)
-    if code != 0:
-        raise RuntimeError(f"Command failed ({code}): {' '.join(cmd)}")
-    return out
 
 
 def _claude_code_command(task: str) -> list[str]:
@@ -73,45 +48,10 @@ def _claude_code_command(task: str) -> list[str]:
     return parts
 
 
-def _owner_repo_from_url(repo_url: str) -> tuple[str, str]:
-    if repo_url.startswith("git@"):
-        path = repo_url.split(":", 1)[1].removesuffix(".git")
-        owner, repo = path.split("/", 1)
-        return owner, repo
-
-    parsed = urlparse(repo_url)
-    path = parsed.path.strip("/").removesuffix(".git")
-    owner, repo = path.split("/", 1)
-    return owner, repo
-
-
-def _has_uncommitted_changes(cwd: Path) -> bool:
-    out = _run_or_raise(cwd, "git", "status", "--porcelain")
-    return bool(_stdout(out).strip())
-
-
-def _ahead_commit_count(cwd: Path, base_branch: str, head_branch: str) -> int:
-    out = _run_or_raise(cwd, "git", "rev-list", "--count", f"{base_branch}..{head_branch}")
-    value = _stdout(out).strip()
-    return int(value or "0")
-
-
-def _looks_like_confirmation_request(cmd_output: str) -> bool:
-    text = _stdout(cmd_output).lower()
-    cues = (
-        "would you like me to",
-        "would you like me",
-        "should i apply",
-        "should i make",
-        "do you want me to",
-        "want me to apply",
-    )
-    return any(cue in text for cue in cues)
-
-
+# Entry point
 def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
     run_id = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    workdir = Path("agent/cloned_repo") / run_id
+    workdir = Path("agent/cloned_repos") / run_id
     workdir.mkdir(parents=True, exist_ok=True)
 
     base_branch = os.getenv("BASE_BRANCH", "main")
@@ -170,7 +110,7 @@ def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
 
 def run_agent(task: str, workdir: Path, create_tests: bool = False) -> str:
     test_instruction = (
-        "- Add appropriate tests for the change.\n"
+        "- Add appropriate tests for the change, and run these if possible.\n"
         if create_tests
         else "- Do NOT create new tests.\n"
     )
@@ -180,9 +120,9 @@ def run_agent(task: str, workdir: Path, create_tests: bool = False) -> str:
         "- Implement the requested code changes directly in files.\n"
         "- Do not ask for confirmation; apply the edits immediately.\n"
         "- Keep behavior unchanged unless the task says otherwise.\n"
-        "- Run relevant tests/linters after edits.\n"
         f"{test_instruction}"
-        "- Output a concise PR report: summary, rationale, tests run, risks.\n\n"
+        "- Output a concise PR report: summary, rationale, risks.\n\n"
+        "- Use ASCII characters only in the PR report (e.g., write O(n^2), use [x] instead of checkmarks).\n\n"
         f"Task:\n{task}"
     )
 
@@ -205,7 +145,8 @@ def run_agent(task: str, workdir: Path, create_tests: bool = False) -> str:
         if _exit_code(out) != 0:
             raise RuntimeError(f"Claude Code retry failed.\n{out}")
 
-    return out
+    report = _stdout(out).strip()
+    return report or out
 
 
 # Just to debug
@@ -214,4 +155,3 @@ if __name__ == "__main__":
         "https://github.com/03axdov/HackEuropeTesting",
         "In file2.py, func3 is slow. Improve it without changing behavior.",
     )
-
