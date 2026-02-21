@@ -54,7 +54,6 @@ def _create_pr_record_via_backend(
     return response.json()
 
 
-
 def _on_rm_error(func, path, exc_info):
     # Make the file writable, then retry
     try:

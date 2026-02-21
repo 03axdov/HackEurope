@@ -2,12 +2,13 @@ import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import LogPage from './pages/LogPage'
 import Reports from './pages/Incidents'
+import PullRequests from './pages/PullRequests'
 
 
 function NotFoundPage() {
   return (
     <section className="rounded-2xl border border-rose-700/40 bg-rose-950/20 p-8">
-      <h1 className="text-4xl font-bold tracking-tight text-rose-200">404</h1>
+      <h1 className="page-title text-4xl font-bold tracking-tight text-rose-200">404</h1>
       <p className="mt-4 text-rose-100/80">Page not found.</p>
     </section>
   )
@@ -31,13 +32,22 @@ function App() {
             Dashboard
           </NavLink>
           <NavLink
+            to="/pull-requests"
+            className={({ isActive }) =>
+              `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-sky-500/30 bg-sky-500/20 text-sky-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+            }
+          >
+            <i className="fa-solid fa-code-pull-request"></i>
+            Pull Requests
+          </NavLink>
+          <NavLink
             to="/reports"
             className={({ isActive }) =>
               `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-amber-500/30 bg-amber-500/20 text-amber-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
           >
             <i className="fa-solid fa-circle-exclamation"></i>
-            Reports
+            Incidents
           </NavLink>
           <NavLink
             to="/logs"
@@ -48,12 +58,14 @@ function App() {
             <i className="fa-solid fa-scroll"></i>
             Logs
           </NavLink>
+          
         </nav>
         <div className="ml-64 h-screen overflow-y-scroll bg-zinc-950/70 px-8 py-12">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/logs" element={<LogPage />} />
+            <Route path="/pull-requests" element={<PullRequests />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
