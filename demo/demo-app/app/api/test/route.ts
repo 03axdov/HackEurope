@@ -1,3 +1,4 @@
+import { codeLocation } from "@/lib/tracing";
 import { trace } from "@opentelemetry/api";
 
 export async function GET(request: Request) {
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
       // Transform data with separate span
       const transformed = await tracer.startActiveSpan(
         "transform.products",
+        { attributes: codeLocation() },
         async (transformSpan) => {
           const result = products.map((p) => ({
             id: p.id,
@@ -48,6 +50,9 @@ export async function GET(request: Request) {
           }));
 
           transformSpan.setAttribute("transform.count", result.length);
+
+          transformSpan.setStatus({ code: 1 }); // OK
+
           transformSpan.end();
           return result;
         }
