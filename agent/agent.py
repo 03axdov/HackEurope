@@ -4,9 +4,10 @@ import shlex
 import shutil
 from pathlib import Path
 from datetime import datetime
+import requests
 from dotenv import load_dotenv
 
-from utils import _run_or_raise, _stdout, create_pr, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
+from utils import _create_pr_record_via_backend, _run_or_raise, _stdout, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
 from git_interactions import _has_uncommitted_changes, _ahead_commit_count, _owner_repo_from_url
 
 
@@ -76,31 +77,25 @@ def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
 
         _run_or_raise(workdir, "git", "push", "-u", "origin", branch)
 
-        token = os.getenv("GITHUB_TOKEN")
-        if not token:
-            print("Missing GITHUB_TOKEN; skipping API PR creation.")
-            owner, repo = _owner_repo_from_url(repo_url)
-            manual_url = f"https://github.com/{owner}/{repo}/pull/new/{branch}"
-            print(f"Open this URL to create the PR manually: {manual_url}")
-            return None
-
         owner, repo = _owner_repo_from_url(repo_url)
+        title = f"Claude Code updates ({run_id})"
         try:
-            pr = create_pr(
+            pr = _create_pr_record_via_backend(
+                repo_url=repo_url,
                 owner=owner,
                 repo=repo,
-                token=token,
-                head=branch,
-                base=base_branch,
-                title=f"Claude Code updates ({run_id})",
+                base_branch=base_branch,
+                head_branch=branch,
+                title=title,
                 body=final_report,
             )
         except Exception as e:
             manual_url = f"https://github.com/{owner}/{repo}/compare/{base_branch}...{branch}?expand=1"
-            print(f"Automatic PR creation failed: {e}")
-            print(f"Open this URL to create the PR manually: {manual_url}")
-            return None
-        print(f"Created PR: {pr.get('html_url')}")
+            raise RuntimeError(
+                f"Failed to create PullRequest record via backend API: {e}\n"
+                f"Compare URL: {manual_url}"
+            ) from e
+        print(f"Created PullRequest record via backend API: id={pr.get('id')}")
         return pr
     finally:
         if os.path.exists(workdir):

@@ -23,49 +23,36 @@ def sh(cwd: Path, *cmd: str, timeout: int = 120) -> str:
         return f"$ {' '.join(cmd)}\n(exit 127)\nSTDOUT:\n\nSTDERR:\n{e}"
 
 
-def create_pr(owner: str, repo: str, token: str, head: str, base: str, title: str, body: str):
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-    payload = {"title": title, "head": head, "base": base, "body": body}
-    auth_headers = [f"Bearer {token}", f"token {token}"]
-    last_response = None
+def _create_pr_record_via_backend(
+    repo_url: str,
+    owner: str,
+    repo: str,
+    base_branch: str,
+    head_branch: str,
+    title: str,
+    body: str,
+):
+    backend_api_base = os.getenv("BACKEND_API_BASE_URL").rstrip("/")
+    url = f"{backend_api_base}/pull-requests/"
+    compare_url = f"https://github.com/{owner}/{repo}/compare/{base_branch}...{head_branch}?expand=1"
 
-    for auth in auth_headers:
-        r = requests.post(
-            url,
-            headers={
-                "Authorization": auth,
-                "Accept": "application/vnd.github+json",
-            },
-            json=payload,
-            timeout=30,
+    payload = {
+        "repo_owner": owner,
+        "repo_name": repo,
+        "repo_url": repo_url,
+        "base_branch": base_branch,
+        "head_branch": head_branch,
+        "title": title,
+        "body": body,
+        "compare_url": compare_url,
+    }
+    response = requests.post(url, json=payload, timeout=30)
+    if not response.ok:
+        raise RuntimeError(
+            f"Backend API pull-request creation failed ({response.status_code}): {response.text}"
         )
-        last_response = r
-        if r.ok:
-            return r.json()
+    return response.json()
 
-        # Retry with alternate auth header format only for auth-style failures.
-        if r.status_code not in (401, 403):
-            break
-
-    status = last_response.status_code if last_response is not None else "unknown"
-    details = ""
-    if last_response is not None:
-        try:
-            j = last_response.json()
-            message = j.get("message", "").strip()
-            errors = j.get("errors")
-            if errors:
-                details = f"{message}; errors={errors}"
-            else:
-                details = message
-        except Exception:
-            details = (last_response.text or "").strip()
-
-    raise RuntimeError(
-        "GitHub PR creation failed "
-        f"(status={status}). {details or 'No response details.'} "
-        "Check token permissions for this repo (Pull requests: Read and write)."
-    )
 
 
 def _on_rm_error(func, path, exc_info):
