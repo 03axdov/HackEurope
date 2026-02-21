@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // instrumentationHook: true,
   },
+  productionBrowserSourceMaps: true,
 };
 
 export default withBetterStack(nextConfig);

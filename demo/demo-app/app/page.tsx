@@ -1,61 +1,19 @@
 import FetchProductsButton from "@/app/components/FetchProductsButton";
 import { getNeo4jStatus } from "@/lib/neo4j";
-import { codeLocation } from "@/lib/tracing";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { prisma } from "@/lib/prisma";
+import { trace } from "@opentelemetry/api";
 
 const tracer = trace.getTracer("demo-app");
 
 export default async function Home() {
-  const neo4j = await tracer.startActiveSpan(
-    "page.Home",
-    { attributes: codeLocation() },
-    async (pageSpan) => {
-      try {
-        console.log("Home page render started");
+  const status = await getNeo4jStatus();
+  const neo4j = {
+    ok: status.ok,
+    message: status.message,
+  };
 
-        const result = await tracer.startActiveSpan(
-          "db.getNeo4jStatus",
-          { attributes: codeLocation() },
-          async (dbSpan) => {
-            try {
-              const status = await getNeo4jStatus();
-              dbSpan.setAttribute("db.neo4j.ok", status.ok);
-              dbSpan.setAttribute("db.neo4j.message", status.message);
-              dbSpan.setStatus({ code: SpanStatusCode.OK });
-              console.log("Neo4j status fetched", {
-                ok: status.ok,
-                message: status.message,
-              });
-              return status;
-            } catch (err) {
-              dbSpan.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: err instanceof Error ? err.message : String(err),
-              });
-              dbSpan.recordException(
-                err instanceof Error ? err : new Error(String(err))
-              );
-              console.error("Neo4j status check failed", { error: String(err) });
-              throw err;
-            } finally {
-              dbSpan.end();
-            }
-          }
-        );
-
-        pageSpan.setStatus({ code: SpanStatusCode.OK });
-        return result;
-      } catch (err) {
-        pageSpan.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: err instanceof Error ? err.message : String(err),
-        });
-        throw err;
-      } finally {
-        pageSpan.end();
-      }
-    }
-  );
+  const products = await prisma.product.findMany();
+  console.log(products);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-8 font-sans dark:bg-black">
