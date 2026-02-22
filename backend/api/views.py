@@ -187,18 +187,17 @@ def merge_pr(owner: str, repo: str, token: str, head: str, base: str):
 
 
 def create_prompt_from_incident(incident):
-    prompt = f"When calling the following HTTP target: '{incident.get("httpTarget")}' "
-    prompt += " it is slow. The following queries are called: \n"
+    prompt = "You are an expert in optimizing code performance without changing the output of the code.\n"
+    prompt += "These are the locations where the slow code is located:\nIn demo2/backend/"
 
     slowCallOperation = incident.get("callOperations")[0]
-    for i, query in enumerate(slowCallOperation.get("queries")):
-        prompt += f"{i+1}: {query}\n"
+    prompt += f"{slowCallOperation.get("callOperation").get("tag")}\n"
 
-    prompt += "With the following args: " + slowCallOperation.get("callOperation").get("args") + ". "
-    prompt += f"It is called from the following file: {slowCallOperation.get("callOperation").get("tag")}. "
+    prompt += "Try to keep the performance optimization in this area, but you may move outside of the area if it is necessary to improve performance.\n"
+    prompt += "Do not use query raw. Use prisma syntax. It is very important that you identify and fix N+1 queries, while keeping the behavior of the code the same."
 
-    prompt += f"For further info, here is the stacktrace: {incident.get("stacktrace")}. "
-    prompt += f"Try to improve performance regarding these queries without changing behaviour. "
+    print(prompt)
+
     return prompt
 
 
@@ -296,9 +295,9 @@ def detect_incidents():
     skipped_missing_structure = 0
     skipped_fast = 0
     for trace in all_traces:
-        getSpan = None
+        # getSpan = None
         callOperations = {}
-        dbQuerySpan = None
+        # dbQuerySpan = None
         callOperationSpans = defaultdict(list)
 
         spans = trace.get("spans") or []
@@ -312,39 +311,45 @@ def detect_incidents():
             skipped_missing_structure += 1
             continue
 
+        duration = 0
         for span in spans:
-            if span.get("operationName") == "GET":
-                getSpan = span
+            if span.get("duration") > duration:
+                duration = span.get("duration")
+            # if not span.get("references"):
+            #     rootSpan = span
+            # if span.get("operationName") == "GET":
+            #     getSpan = span
             if span.get("operationName") == "prisma:call-operation":
                 callOperations[span.get("spanID")] = span
-            if span.get("operationName") == "prisma:client:db_query":
-                dbQuerySpan = span
-                references = dbQuerySpan.get("references") or []
-                if not references:
-                    continue
-                firstReference = references[0]
-                spanId = firstReference.get("spanID")
+            # if span.get("operationName") == "prisma:client:db_query":
+            #     dbQuerySpan = span
+            #     references = dbQuerySpan.get("references") or []
+            #     if not references:
+            #         continue
+            #     firstReference = references[0]
+            #     spanId = firstReference.get("spanID")
                 
-                for tag in dbQuerySpan.get("tags"):
-                    if tag.get("key") == "db.query.text":
-                        callOperationSpans[spanId].append(tag.get("value"))
+            #     for tag in dbQuerySpan.get("tags"):
+            #         if tag.get("key") == "db.query.text":
+            #             callOperationSpans[spanId].append(tag.get("value"))
 
-        if not getSpan or len(callOperations) == 0 or not dbQuerySpan:
+        if len(callOperations) == 0:
             skipped_missing_structure += 1
             continue
 
-        duration = getSpan.get("duration")
+        # duration = rootSpan.get("duration")
+
         if duration < 2 * 10**6:
             skipped_fast += 1
             continue
 
-        httpTarget = None
-        stacktrace = None
-        for tag in getSpan.get("tags"):
-            if tag.get("key") == "http.target":
-                httpTarget = tag
-            if tag.get("key") == "code.stacktrace":
-                stacktrace = tag
+        # httpTarget = None
+        # stacktrace = None
+        # for tag in getSpan.get("tags"):
+        #     if tag.get("key") == "http.target":
+        #         httpTarget = tag
+        #     if tag.get("key") == "code.stacktrace":
+        #         stacktrace = tag
 
         for span_id in callOperations:
             curr = {"duration": callOperations[span_id].get("duration")}
@@ -356,23 +361,24 @@ def detect_incidents():
                 
             callOperations[span_id] = curr
 
-        print(callOperations)
+        # if httpTarget.get("value") == "/matches":
+        #     continue
         
         incidents[trace.get("traceID")] = {
-            "httpTarget": httpTarget.get("value"),
-            "stacktrace": stacktrace.get("value"),
+            # "httpTarget": httpTarget.get("value") if httpTarget else None,
+            # "stacktrace": stacktrace.get("value"),
             "duration": duration,
             "callOperations": sorted([{
                 "callOperation": callOperations[span_id],
-                "queries": sorted(callOperationSpans[span_id])
             } for span_id in callOperations], key=lambda co: co.get("callOperation").get("duration"), reverse=True)
         }
+        
         log_event(
-            "analyze_trace",
+            "analyze_trace_output",
             "Detected slow trace candidate.",
             context={
                 "trace_id": trace.get("traceID"),
-                "http_target": httpTarget.get("value") if httpTarget else None,
+                # "http_target": httpTarget.get("value") if httpTarget else None,
                 "duration_micros": duration,
                 "call_operation_count": len(callOperations),
             },
@@ -388,8 +394,20 @@ def detect_incidents():
         },
     )
 
-    
+    deduplicated_incidents = {}
     for trace_id in incidents:
+        incident = incidents[trace_id]
+        slowCallOperation = incident.get("callOperations")[0]
+        deduplicated_incidents[slowCallOperation.get("callOperation").get("tag")] = {
+            "incident": incident,
+            "trace_id": trace_id,
+        }
+
+    for key in deduplicated_incidents:
+        incident_data = deduplicated_incidents[key]
+        incident = incident_data.get("incident")
+        trace_id = incident_data.get("trace_id")
+
         incident_data = incidents[trace_id]
         prompt = create_prompt_from_incident(incident_data)
         log_event(
@@ -399,7 +417,7 @@ def detect_incidents():
         )
         print("GENERATING PR")
         try:
-            pull_request = generate_pr("https://github.com/didrikmunther/hackeurope-demo.git", prompt=prompt)
+            pull_request = generate_pr(os.getenv("GITHUB_LINK"), prompt=prompt)
         except Exception as exc:
             log_event(
                 "generate_pr",

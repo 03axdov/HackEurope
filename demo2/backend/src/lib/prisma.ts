@@ -4,14 +4,14 @@ import { AsyncLocalStorage } from "async_hooks";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client";
 import { tracer } from "../tracer";
-import { context, Span, trace } from "@opentelemetry/api";
+import { context, Context, trace } from "@opentelemetry/api";
 
 const connectionString = `${process.env.DATABASE_URL}`;
 const adapter = new PrismaPg({ connectionString });
 
 type CallSite = {
   stack: string;
-  span: Span | undefined;
+  ctx: Context;
 }
 
 const callSiteStorage = new AsyncLocalStorage<CallSite>();
@@ -37,8 +37,8 @@ function withCallSite<T extends (...args: any[]) => any>(
 ): T {
   return function (this: unknown, ...args: any[]) {
     const stack = captureUserStack();
+    const ctx = context.active();
     const result = fn.apply(thisArg, args) as any;
-    const span = trace.getActiveSpan();
 
     // Prisma returns a lazy "PrismaPromise" that doesn't execute until .then() is called
     // (at the `await` in the caller). By that point, callSiteStorage.run() has already
@@ -51,7 +51,7 @@ function withCallSite<T extends (...args: any[]) => any>(
     ) {
       const originalThen = result.then.bind(result);
       result.then = (onFulfilled?: any, onRejected?: any) =>
-        callSiteStorage.run({stack, span}, () => originalThen(onFulfilled, onRejected));
+        callSiteStorage.run({stack, ctx}, () => originalThen(onFulfilled, onRejected));
     }
 
     return result;
@@ -77,7 +77,7 @@ const baseClient = new PrismaClient({ adapter }).$extends({
   query: {
     $allModels: {
       async $allOperations({ model, operation, args, query }) {
-        const {stack, span} = callSiteStorage.getStore() ?? {};
+        const {stack, ctx} = callSiteStorage.getStore() ?? {};
 
         const frames = stack?.split("\n").map((line) => {
           // Make absolute paths relative so the stack is portable/readable
@@ -91,9 +91,7 @@ const baseClient = new PrismaClient({ adapter }).$extends({
           `Executing ${operation} on ${model} — called from:\n${frame}`
         );
 
-        const newContext =span ? trace.setSpan(context.active(), span) : context.active()
-
-        return context.with(newContext, () => {
+        return context.with(ctx ?? context.active(), () => {
           return tracer.startActiveSpan(`prisma:call-operation`, async (span) => {
             span
               .setAttribute("prisma.model", model)
@@ -103,6 +101,7 @@ const baseClient = new PrismaClient({ adapter }).$extends({
   
             const result = await query(args);
             span.end();
+
             return result;
           });
         });

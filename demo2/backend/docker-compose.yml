@@ -27,4 +27,6 @@ services:
       - "4318:4318"
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+    volumes:
+      - ./.volume/jaeger:/data
     restart: always
