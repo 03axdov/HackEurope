@@ -69,7 +69,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
     queryset = Incident.objects.all().order_by("-id")
     serializer_class = IncidentSerializer
 
-    @action(detail=False, methods=["get"], url_path="detect")
+    @action(detail=False, methods=["post"], url_path="detect")
     def detect(self, request):
         try:
             traces = detect_incidents()
