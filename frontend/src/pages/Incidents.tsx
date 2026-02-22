@@ -24,6 +24,13 @@ const RESOLVED_INCIDENTS_LAST_MONTH = [
 ]
 
 const SEVERITY_ORDER: Incident['severity'][] = ['low', 'medium', 'high', 'critical', 'blocker']
+const APPROX_IMPROVEMENT_PERCENT_BY_SEVERITY: Record<Incident['severity'], number> = {
+  low: 6,
+  medium: 12,
+  high: 22,
+  critical: 34,
+  blocker: 48,
+}
 
 function getSeverityChartColorClass(severity: Incident['severity']) {
   switch (severity) {
@@ -61,6 +68,10 @@ function getSeverityBadgeClass(severity: Incident['severity']) {
 
 function formatSeverityLabel(severity: Incident['severity']) {
   return severity.charAt(0).toUpperCase() + severity.slice(1)
+}
+
+function formatImprovementPercent(percent: number) {
+  return `~${percent.toFixed(0)}%`
 }
 
 export default function Reports() {
@@ -156,6 +167,17 @@ export default function Reports() {
     (sum, d) => sum + SEVERITY_ORDER.reduce((inner, severity) => inner + (d.bySeverity[severity] ?? 0), 0),
     0,
   )
+  const weightedImprovementPercentSum = RESOLVED_INCIDENTS_LAST_MONTH.reduce(
+    (sum, d) =>
+      sum +
+      SEVERITY_ORDER.reduce(
+        (inner, severity) =>
+          inner + (d.bySeverity[severity] ?? 0) * APPROX_IMPROVEMENT_PERCENT_BY_SEVERITY[severity],
+        0,
+      ),
+    0,
+  )
+  const approxImprovementPercent = totalResolved > 0 ? weightedImprovementPercentSum / totalResolved : 0
 
   return (
     <>
@@ -224,9 +246,19 @@ export default function Reports() {
               </p>
               <h2 className="mt-1 text-lg font-semibold text-zinc-100">Last 30 days</h2>
             </div>
-            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-right">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-blue-200/80">Total Resolved</div>
-              <div className="text-xl font-semibold text-blue-100">{totalResolved}</div>
+            <div className="flex flex-wrap items-stretch gap-2">
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-right">
+                <div className="text-[11px] uppercase tracking-[0.12em] text-blue-200/80">Total Resolved</div>
+                <div className="text-xl font-semibold text-blue-100">{totalResolved}</div>
+              </div>
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-right">
+                <div className="text-[11px] uppercase tracking-[0.12em] text-emerald-200/80">
+                  Performance Improvement
+                </div>
+                <div className="text-xl font-semibold text-emerald-100">
+                  {formatImprovementPercent(approxImprovementPercent)}
+                </div>
+              </div>
             </div>
           </div>
 
