@@ -129,7 +129,7 @@ export default function LogPage() {
     <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-8 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400/80">Activity</p>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title text-4xl font-extrabold tracking-tight text-zinc-50">Logs</h1>
+        <h1 className="page-title text-4xl tracking-tight text-zinc-50">Logs</h1>
         <div className="flex flex-wrap gap-2">
           {(['all', 'info', 'warning', 'error'] as const).map((level) => (
             <button

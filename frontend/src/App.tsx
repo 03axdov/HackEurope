@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import LogPage from './pages/LogPage'
+import NotificationsPage from './pages/Notifications'
+import StatisticsPage from './pages/Statistics'
 import Reports from './pages/Incidents'
 
 
@@ -15,7 +17,7 @@ function NotFoundPage() {
 }
 
 function App() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
 
   return (
     <BrowserRouter>
@@ -28,7 +30,7 @@ function App() {
           <button
             type="button"
             onClick={() => setSidebarCollapsed((prev) => !prev)}
-            className="cursor-pointer absolute top-1/2 -right-2.5 flex h-20 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition hover:bg-zinc-800 hover:text-zinc-100"
+            className="cursor-pointer absolute top-1/2 -right-2.5 flex h-20 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition duration-200 hover:duration-0 hover:bg-zinc-800 hover:text-zinc-100"
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -44,7 +46,7 @@ function App() {
               <img className="h-5 w-5 shrink-0" src="images/logo.webp" />
               {!sidebarCollapsed ? (
                 <span className="bg-linear-to-r from-blue-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">
-                  Optimera
+                  Optimera.AI
                 </span>
               ) : null}
             </div>
@@ -52,7 +54,7 @@ function App() {
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors ${
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors duration-200 hover:duration-0 ${
                 sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
               } ${isActive ? 'border-blue-500/30 bg-blue-500/20 text-blue-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
@@ -67,7 +69,7 @@ function App() {
           <NavLink
             to="/traces"
             className={({ isActive }) =>
-              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors ${
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors duration-200 hover:duration-0 ${
                 sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
               } ${isActive ? 'border-emerald-500/30 bg-emerald-500/20 text-emerald-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
@@ -82,7 +84,7 @@ function App() {
           <NavLink
             to="/logs"
             className={({ isActive }) =>
-              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors ${
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors duration-200 hover:duration-0 ${
                 sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
               } ${isActive ? 'border-violet-500/30 bg-violet-500/20 text-violet-300' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
@@ -92,6 +94,36 @@ function App() {
               <i className="fa-solid fa-scroll text-sm leading-none"></i>
             </span>
             {!sidebarCollapsed ? 'Logs' : null}
+          </NavLink>
+
+          <NavLink
+            to="/notifications"
+            className={({ isActive }) =>
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors duration-200 hover:duration-0 ${
+                sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
+              } ${isActive ? 'border-fuchsia-500/30 bg-fuchsia-500/20 text-fuchsia-300' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+            }
+            title={sidebarCollapsed ? 'Notifications' : undefined}
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center leading-none">
+              <i className="fa-solid fa-bell text-sm leading-none"></i>
+            </span>
+            {!sidebarCollapsed ? 'Notifications' : null}
+          </NavLink>
+
+          <NavLink
+            to="/statistics"
+            className={({ isActive }) =>
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors duration-200 hover:duration-0 ${
+                sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
+              } ${isActive ? 'border-cyan-500/30 bg-cyan-500/20 text-cyan-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+            }
+            title={sidebarCollapsed ? 'Statistics' : undefined}
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center leading-none">
+              <i className="fa-solid fa-chart-pie text-sm leading-none"></i>
+            </span>
+            {!sidebarCollapsed ? 'Statistics' : null}
           </NavLink>
           
         </nav>
@@ -104,6 +136,8 @@ function App() {
             <Route path="/traces" element={<Dashboard />} />
             <Route path="/" element={<Reports />} />
             <Route path="/logs" element={<LogPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/statistics" element={<StatisticsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>

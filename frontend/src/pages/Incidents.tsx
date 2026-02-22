@@ -218,7 +218,7 @@ export default function Reports() {
       <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-8 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400/80">Monitoring</p>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="page-title text-4xl font-extrabold tracking-tight text-zinc-50">Dashboard</h1>
+          <h1 className="page-title text-4xl tracking-tight text-zinc-50">Dashboard</h1>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -603,7 +603,7 @@ export default function Reports() {
                                 type="button"
                                 disabled={rejectingIncidentId === incident.id}
                                 onClick={() => setConfirmRejectTarget(incident)}
-                                className="cursor-pointer flex flex-row items-center gap-2 rounded border border-rose-500/35 bg-rose-500/15 px-3 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="cursor-pointer flex flex-row items-center gap-2 rounded border border-zinc-700 bg-zinc-800/80 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 <i className="fa-solid fa-xmark"></i>
                                 {rejectingIncidentId === incident.id ? 'Rejecting...' : 'Reject Fix'}
@@ -734,7 +734,7 @@ export default function Reports() {
       {confirmRejectTarget ? (
         <div onClick={() => setConfirmRejectTarget(null)} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-400/80">Confirm Action</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">Confirm Action</p>
             <h2 className="mt-2 text-xl font-semibold text-zinc-100">Reject Suggested Fix?</h2>
             <p className="mt-3 text-sm text-zinc-300">
               This will remove incident <span className="font-semibold text-zinc-100">#{confirmRejectTarget.id}</span> from the dashboard.
@@ -767,7 +767,7 @@ export default function Reports() {
                     setRejectingIncidentId(null)
                   }
                 }}
-                className="flex flex-row items-center cursor-pointer rounded border border-rose-500/35 bg-rose-500/15 px-3 py-1.5 text-sm font-medium text-rose-200 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex flex-row items-center cursor-pointer rounded border border-zinc-700 bg-zinc-800/80 px-3 py-1.5 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i className="fa-solid fa-trash"></i>
                 {rejectingIncidentId === confirmRejectTarget.id ? 'Rejecting...' : 'Reject Fix'}
