@@ -117,7 +117,7 @@ def run_agent(task: str, workdir: Path, create_tests: bool = False) -> str:
         "- Do not ask for confirmation; apply the edits immediately.\n"
         "- Keep behavior unchanged unless the task says otherwise.\n"
         f"{test_instruction}"
-        "- Output a concise PR report: summary, rationale, risks.\n\n"
+        "- Output a very concise PR report: summary, rationale, risks.\n\n"
         "- Use ASCII characters only in the PR report (e.g., write O(n^2), use [x] instead of checkmarks).\n\n"
         f"Task:\n{task}"
     )
