@@ -7,7 +7,6 @@ import { registerInstrumentations } from '@opentelemetry/instrumentation'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import { BasicTracerProvider, ReadableSpan, Span, SpanProcessor, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions'
-import { PrismaInstrumentation } from '@prisma/instrumentation'
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
 
@@ -75,7 +74,7 @@ const provider = new BasicTracerProvider({
 trace.setGlobalTracerProvider(provider)
 
 registerInstrumentations({
-  instrumentations: [getNodeAutoInstrumentations(), new PrismaInstrumentation(), new ExpressInstrumentation()],
+  instrumentations: [getNodeAutoInstrumentations(), new ExpressInstrumentation()],
 })
 
 /**

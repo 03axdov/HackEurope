@@ -533,9 +533,9 @@ export default function Reports() {
                             </div>
                           </div>
                         </div>
-                        <span className="max-w-[16rem] shrink-0 truncate rounded border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
+                        {/* <span className="max-w-[16rem] shrink-0 truncate rounded border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
                           {incident.url || 'Unknown URL'}
-                        </span>
+                        </span> */}
                       </summary>
 
                       <div className="border-t border-zinc-800 px-4 py-3">
@@ -559,6 +559,19 @@ export default function Reports() {
                                 <i className="fa-solid fa-arrow-right-long mx-2"></i>
                                 <span className="p-1 rounded-md border border-zinc-800/80 bg-zinc-950/70">{pullRequestsById[incident.pullRequest].base_branch}</span>
                               </div>
+                              {pullRequestsById[incident.pullRequest].compare_url ? (
+                                <div className="mt-2">
+                                  <a
+                                    href={pullRequestsById[incident.pullRequest].compare_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 hover:underline"
+                                  >
+                                    <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                                    {pullRequestsById[incident.pullRequest].compare_url}
+                                  </a>
+                                </div>
+                              ) : null}
                               {pullRequestsById[incident.pullRequest].body ? (
                                 <details className="group/prdesc mt-3 rounded-md border border-zinc-800/80 bg-zinc-950/70">
                                   <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2">
