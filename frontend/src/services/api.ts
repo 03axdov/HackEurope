@@ -1,6 +1,7 @@
 import type { Trace } from '../types/Trace'
 import type { PullRequest } from '../types/PullRequest'
 import type { Incident } from '../types/Incident'
+import type { LogEntry } from '../types/Log'
 
 export async function get_services() {
   const response = await fetch('/jaeger-api/api/services')
@@ -74,4 +75,14 @@ export async function merge_pull_request(id: number) {
   }
 
   return response.json()
+}
+
+export async function get_logs(): Promise<LogEntry[]> {
+  const response = await fetch('/backend-api/logs/?limit=500')
+  if (!response.ok) {
+    throw new Error(`Failed to fetch logs: ${response.status} ${response.statusText}`)
+  }
+
+  const result = (await response.json()) as LogEntry[]
+  return Array.isArray(result) ? result : []
 }

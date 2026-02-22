@@ -24,7 +24,7 @@ function App() {
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-amber-500/30 bg-amber-500/20 text-amber-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+              `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-blue-500/30 bg-blue-500/20 text-blue-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
           >
             <i className="fa-solid fa-circle-exclamation"></i>

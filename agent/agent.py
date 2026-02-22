@@ -153,13 +153,16 @@ def generate_incident_fields(detection_prompt: str, pull_request_title: str, pul
         "Given the incident-detection prompt and the suggested pull request title/description, "
         "write concise, accurate incident metadata.\n"
         "Output ONLY a valid JSON object with exactly these string keys: "
-        "title, problemDescription, solutionDescription.\n"
+        "title, problemDescription, solutionDescription, severity.\n"
         "Requirements:\n"
         "- ASCII only.\n"
         "- No markdown fences.\n"
-        "- title should be short and specific.\n"
+        '- title MUST be formatted exactly like: "For {page} caused by {brief description}".\n'
+        "- Infer {page} from the HTTP route/target if possible.\n"
+        "- {brief description} should be short and specific.\n"
         "- problemDescription should describe the observed issue and impact.\n"
-        "- solutionDescription should summarize what the suggested PR changes/fixes.\n\n"
+        "- solutionDescription should summarize what the suggested PR changes/fixes.\n"
+        "- severity must be one of: low, medium, high, critical, blocker.\n\n"
         f"Incident detection prompt:\n{detection_prompt}\n\n"
         f"Suggested PR title:\n{pull_request_title}\n\n"
         f"Suggested PR description:\n{pull_request_description}\n"
@@ -191,10 +194,15 @@ def generate_incident_fields(detection_prompt: str, pull_request_title: str, pul
         "title": str(data.get("title", "")).strip(),
         "problemDescription": str(data.get("problemDescription", "")).strip(),
         "solutionDescription": str(data.get("solutionDescription", "")).strip(),
+        "severity": str(data.get("severity", "")).strip().lower(),
     }
     missing = [k for k, v in result.items() if not v]
     if missing:
         raise RuntimeError(f"Claude incident field output missing required values: {', '.join(missing)}")
+
+    valid_severities = {"low", "medium", "high", "critical", "blocker"}
+    if result["severity"] not in valid_severities:
+        raise RuntimeError(f"Claude incident field output has invalid severity: {result['severity']}")
 
     return result
 

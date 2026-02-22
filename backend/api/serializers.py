@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Incident, PullRequest
+from .models import Incident, Log, PullRequest
 
 
 class PullRequestSerializer(serializers.ModelSerializer):
@@ -27,6 +27,8 @@ class IncidentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "pullRequest",
+            "url",
+            "severity",
             "title",
             "problemDescription",
             "solutionDescription",
@@ -34,3 +36,21 @@ class IncidentSerializer(serializers.ModelSerializer):
             "impactCount",
         ]
         read_only_fields = ["id"]
+
+
+class LogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Log
+        fields = [
+            "id",
+            "run_id",
+            "source",
+            "step",
+            "level",
+            "message",
+            "context",
+            "incident",
+            "pull_request",
+            "created_at",
+        ]
+        read_only_fields = fields

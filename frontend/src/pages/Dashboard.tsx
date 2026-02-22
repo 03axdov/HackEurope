@@ -171,7 +171,14 @@ export default function Dashboard() {
                       <span className="inline-flex h-5 w-5 items-center justify-center rounded text-xs text-zinc-400 transition-transform group-open:rotate-90">
                         <i className="fa-solid fa-chevron-right"></i>
                       </span>
-                      <span className="truncate font-medium">{serviceName}</span>
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
+                          <i className="fa-solid fa-cube text-xs"></i>
+                        </span>
+                        <span className="truncate rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold tracking-tight text-emerald-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                          {serviceName}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-zinc-400">{traces.length} traces</div>

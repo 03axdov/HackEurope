@@ -1,4 +1,5 @@
 import os
+import uuid
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -14,8 +15,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from agent.agent import generate_pr, generate_incident_fields
 
-from .models import Incident, PullRequest
-from .serializers import IncidentSerializer, PullRequestSerializer
+from .models import Incident, Log, PullRequest
+from .serializers import IncidentSerializer, LogSerializer, PullRequestSerializer
 
 
 class PullRequestViewSet(viewsets.ModelViewSet):
@@ -82,6 +83,44 @@ class IncidentViewSet(viewsets.ModelViewSet):
             {"data": traces, "count": len(traces)},
             status=status.HTTP_200_OK,
         )
+
+
+class LogViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = LogSerializer
+
+    def get_queryset(self):
+        qs = Log.objects.all().order_by("-created_at", "-id")
+
+        params = self.request.query_params
+        run_id = params.get("run_id")
+        source = params.get("source")
+        step = params.get("step")
+        level = params.get("level")
+        incident_id = params.get("incident")
+        pull_request_id = params.get("pull_request")
+        limit = params.get("limit")
+
+        if run_id:
+            qs = qs.filter(run_id=run_id)
+        if source:
+            qs = qs.filter(source=source)
+        if step:
+            qs = qs.filter(step=step)
+        if level:
+            qs = qs.filter(level=level)
+        if incident_id:
+            qs = qs.filter(incident_id=incident_id)
+        if pull_request_id:
+            qs = qs.filter(pull_request_id=pull_request_id)
+
+        if limit:
+            try:
+                limit_int = max(1, min(int(limit), 1000))
+                qs = qs[:limit_int]
+            except (TypeError, ValueError):
+                pass
+
+        return qs
 
 
 def merge_pr(owner: str, repo: str, token: str, head: str, base: str):
@@ -165,14 +204,39 @@ def create_prompt_from_incident(incident):
 
 from collections import defaultdict
 def detect_incidents():
+    run_id = uuid.uuid4().hex[:12]
+
+    def log_event(step, message, *, level="info", context=None, incident=None, pull_request=None):
+        try:
+            Log.objects.create(
+                run_id=run_id,
+                source="detect_incidents",
+                step=step,
+                level=level,
+                message=message,
+                context=context or {},
+                incident=incident,
+                pull_request=pull_request,
+            )
+        except Exception as exc:
+            print(f"Failed to persist detect_incidents log ({step}): {exc}")
+
+    log_event("start", "Starting incident detection run.")
 
     jaeger_base_url = os.getenv("JAEGER_BASE_URL", "http://localhost:16686").rstrip("/")
+    log_event("config", "Using Jaeger base URL.", context={"jaeger_base_url": jaeger_base_url})
 
     services_response = requests.get(
         f"{jaeger_base_url}/api/services",
         timeout=30,
     )
     if not services_response.ok:
+        log_event(
+            "fetch_services",
+            "Failed to fetch services from Jaeger.",
+            level="error",
+            context={"status_code": services_response.status_code, "response_text": services_response.text[:1000]},
+        )
         raise RuntimeError(
             f"Failed to fetch services from Jaeger ({services_response.status_code}): {services_response.text}"
         )
@@ -181,6 +245,9 @@ def detect_incidents():
     services = services_payload.get("data", []) if isinstance(services_payload, dict) else []
     if not isinstance(services, list):
         services = []
+        log_event("fetch_services", "Services payload had unexpected shape; defaulted to empty list.", level="warning")
+    else:
+        log_event("fetch_services", "Fetched services from Jaeger.", context={"service_count": len(services)})
 
     all_traces = []
     for service_name in services:
@@ -190,6 +257,16 @@ def detect_incidents():
             timeout=30,
         )
         if not traces_response.ok:
+            log_event(
+                "fetch_traces",
+                "Failed to fetch traces for service.",
+                level="error",
+                context={
+                    "service_name": service_name,
+                    "status_code": traces_response.status_code,
+                    "response_text": traces_response.text[:1000],
+                },
+            )
             raise RuntimeError(
                 f"Failed to fetch traces for service '{service_name}' "
                 f"({traces_response.status_code}): {traces_response.text}"
@@ -199,22 +276,51 @@ def detect_incidents():
         traces = traces_payload.get("data", []) if isinstance(traces_payload, dict) else []
         if isinstance(traces, list):
             all_traces.extend(traces)
+            log_event(
+                "fetch_traces",
+                "Fetched traces for service.",
+                context={"service_name": service_name, "trace_count": len(traces)},
+            )
+        else:
+            log_event(
+                "fetch_traces",
+                "Traces payload had unexpected shape for service; skipping.",
+                level="warning",
+                context={"service_name": service_name},
+            )
+
+    log_event("fetch_traces", "Completed Jaeger trace fetch for all services.", context={"total_trace_count": len(all_traces)})
 
     incidents = {}
+    skipped_missing_structure = 0
+    skipped_fast = 0
     for trace in all_traces:
         getSpan = None
         callOperations = {}
         dbQuerySpan = None
         callOperationSpans = defaultdict(list)
 
-        for span in trace.get("spans"):
+        spans = trace.get("spans") or []
+        if not isinstance(spans, list):
+            log_event(
+                "analyze_trace",
+                "Trace missing spans list; skipping.",
+                level="warning",
+                context={"trace_id": trace.get("traceID")},
+            )
+            skipped_missing_structure += 1
+            continue
+
+        for span in spans:
             if span.get("operationName") == "GET":
                 getSpan = span
             if span.get("operationName") == "prisma:call-operation":
                 callOperations[span.get("spanID")] = span
             if span.get("operationName") == "prisma:client:db_query":
                 dbQuerySpan = span
-                references = dbQuerySpan.get("references")
+                references = dbQuerySpan.get("references") or []
+                if not references:
+                    continue
                 firstReference = references[0]
                 spanId = firstReference.get("spanID")
                 
@@ -223,10 +329,12 @@ def detect_incidents():
                         callOperationSpans[spanId].append(tag.get("value"))
 
         if not getSpan or len(callOperations) == 0 or not dbQuerySpan:
+            skipped_missing_structure += 1
             continue
 
         duration = getSpan.get("duration")
         if duration < 2 * 10**6:
+            skipped_fast += 1
             continue
 
         httpTarget = None
@@ -258,46 +366,118 @@ def detect_incidents():
                 "queries": sorted(callOperationSpans[span_id])
             } for span_id in callOperations], key=lambda co: co.get("callOperation").get("duration"), reverse=True)
         }
+        log_event(
+            "analyze_trace",
+            "Detected slow trace candidate.",
+            context={
+                "trace_id": trace.get("traceID"),
+                "http_target": httpTarget.get("value") if httpTarget else None,
+                "duration_micros": duration,
+                "call_operation_count": len(callOperations),
+            },
+        )
+
+    log_event(
+        "analyze_trace",
+        "Finished analyzing traces.",
+        context={
+            "candidate_count": len(incidents),
+            "skipped_missing_structure": skipped_missing_structure,
+            "skipped_fast": skipped_fast,
+        },
+    )
 
     
     for trace_id in incidents:
-       incident_data = incidents[trace_id]
-       prompt = create_prompt_from_incident(incident_data)
-       print("GENERATING PR")
-       pull_request = generate_pr("https://github.com/03axdov/HackEurope", prompt=prompt)
-
-       if isinstance(pull_request, dict) and pull_request.get("id"):
-           http_target = incident_data.get("httpTarget") or "unknown target"
-           duration_micros = incident_data.get("duration") or 0
-           call_ops = incident_data.get("callOperations") or []
-           top_queries = []
-           if call_ops and isinstance(call_ops, list):
-               top_queries = call_ops[0].get("queries") or []
-
-           incident_fields = {}
-           try:
-               incident_fields = generate_incident_fields(
-                   detection_prompt=prompt,
-                   pull_request_title=str(pull_request.get("title") or ""),
-                   pull_request_description=str(pull_request.get("body") or ""),
-               )
-           except Exception as exc:
-               print(f"Failed to generate incident text via Claude; using fallback text. Error: {exc}")
-
-           Incident.objects.create(
-               pullRequest_id=pull_request["id"],
-               title=incident_fields.get("title") or f"Slow endpoint detected: {http_target}",
-               problemDescription=incident_fields.get("problemDescription") or (
-                   f"Slow HTTP request detected for '{http_target}' in trace {trace_id}. "
-                   f"Observed duration: {duration_micros / 1_000_000:.3f} seconds."
-               ),
-               solutionDescription=incident_fields.get("solutionDescription") or (
-                   "A pull request was generated to improve performance. "
-                   + (f"Primary related queries: {', '.join(top_queries)}" if top_queries else "No query details captured.")
-               ),
-               timeImpact=float(duration_micros) / 1_000_000,
-               impactCount=len(call_ops),
+        incident_data = incidents[trace_id]
+        prompt = create_prompt_from_incident(incident_data)
+        log_event(
+            "generate_prompt",
+            "Created PR-generation prompt for incident candidate.",
+            context={"trace_id": trace_id, "http_target": incident_data.get("httpTarget")},
+        )
+        print("GENERATING PR")
+        try:
+            pull_request = generate_pr("https://github.com/03axdov/HackEurope", prompt=prompt)
+        except Exception as exc:
+            log_event(
+                "generate_pr",
+                "Failed to generate pull request suggestion.",
+                level="error",
+                context={"trace_id": trace_id, "error": str(exc)},
+            )
+            raise
+ 
+        log_event(
+            "generate_pr",
+            "Pull request suggestion generation completed.",
+            context={
+                "trace_id": trace_id,
+                "pull_request_id": pull_request.get("id") if isinstance(pull_request, dict) else None,
+            },
+        )
+ 
+        if isinstance(pull_request, dict) and pull_request.get("id"):
+            http_target = incident_data.get("httpTarget") or "unknown target"
+            duration_micros = incident_data.get("duration") or 0
+            call_ops = incident_data.get("callOperations") or []
+            top_queries = []
+            if call_ops and isinstance(call_ops, list):
+                top_queries = call_ops[0].get("queries") or []
+ 
+            incident_fields = {}
+            try:
+                incident_fields = generate_incident_fields(
+                    detection_prompt=prompt,
+                    pull_request_title=str(pull_request.get("title") or ""),
+                    pull_request_description=str(pull_request.get("body") or ""),
+                )
+            except Exception as exc:
+                print(f"Failed to generate incident text via Claude; using fallback text. Error: {exc}")
+                log_event(
+                    "generate_incident_text",
+                    "Failed to generate incident text via Claude; using fallback text.",
+                    level="warning",
+                    context={"trace_id": trace_id, "pull_request_id": pull_request["id"], "error": str(exc)},
+                )
+ 
+            created_incident = Incident.objects.create(
+                pullRequest_id=pull_request["id"],
+                url=str(incident_data.get("httpTarget") or ""),
+                title=incident_fields.get("title") or f"For {http_target} caused by slow database queries",
+                problemDescription=incident_fields.get("problemDescription") or (
+                    f"Slow HTTP request detected for '{http_target}' in trace {trace_id}. "
+                    f"Observed duration: {duration_micros / 1_000_000:.3f} seconds."
+                ),
+                solutionDescription=incident_fields.get("solutionDescription") or (
+                    "A pull request was generated to improve performance. "
+                    + (f"Primary related queries: {', '.join(top_queries)}" if top_queries else "No query details captured.")
+                ),
+                severity=incident_fields.get("severity") or "medium",
+                timeImpact=round(float(duration_micros) / 1_000_000, 2),
+                impactCount=len(call_ops),
+            )
+            linked_pull_request = PullRequest.objects.filter(id=pull_request["id"]).first()
+ 
+            log_event(
+                "create_incident",
+                "Created incident linked to suggested pull request.",
+                context={
+                    "trace_id": trace_id,
+                    "http_target": http_target,
+                    "duration_micros": duration_micros,
+                 },
+                 incident=created_incident,
+                pull_request=linked_pull_request,
+             )
+        else:
+           log_event(
+               "generate_pr",
+               "PR generation returned no PullRequest record id; skipping incident creation.",
+               level="warning",
+               context={"trace_id": trace_id},
            )
-        
+    
+    log_event("complete", "Incident detection run completed.", context={"created_incident_candidates": len(incidents)})
 
     return incidents
