@@ -8,6 +8,6 @@
  *
  * 🟢 You can import this file directly.
  */
-export type * from './models/User'
-export type * from './models/Post'
+export type * from './models/AIModel'
+export type * from './models/Match'
 export type * from './commonInputTypes'

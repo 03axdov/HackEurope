@@ -6,17 +6,43 @@ datasource db {
   provider = "postgresql"
 }
 
-model User { 
-  id    Int     @id @default(autoincrement()) 
-  email String  @unique
-  name  String?
-  posts Post[]
-} 
-model Post { 
-  id        Int     @id @default(autoincrement()) 
-  title     String
-  content   String?
-  published Boolean @default(false) 
-  author    User    @relation(fields: [authorId], references: [id]) 
-  authorId  Int
-} 
+model AIModel {
+  id           Int      @id @default(autoincrement())
+  name         String 
+  provider     String   // e.g., "OpenAI", "Meta"
+  version      String
+  created_at   DateTime @default(now())
+
+  // Relations
+  matchesAsA   Match[]  @relation("ModelA")
+  matchesAsB   Match[]  @relation("ModelB")
+  wins         Match[]  @relation("Winner")
+}
+
+model Match {
+  id           BigInt   @id @default(autoincrement())
+  playedAt     DateTime @default(now())
+  
+  // Foreign Keys
+  modelAId     Int
+  modelBId     Int
+  winnerId     Int?     // Nullable in case of a draw (rare in RPS, but possible)
+
+  // The "Heavy" Column
+  // This is the "Red Herring" trap. Storing full raw logs here makes 
+  // "SELECT *" queries incredibly slow as the DB fetches large blobs.
+  rawLog       Json     
+
+  // Game Data
+  modelAMove   String   // "ROCK", "PAPER", "SCISSORS"
+  modelBMove   String
+  durationMs   Int      // How long the "AI" took to "think"
+
+  // Relations
+  modelA       AIModel  @relation("ModelA", fields: [modelAId], references: [id])
+  modelB       AIModel  @relation("ModelB", fields: [modelBId], references: [id])
+  winner       AIModel? @relation("Winner", fields: [winnerId], references: [id])
+
+  // NOTE: For the "Bad" version, we intentionally omit indexes on modelAId/winnerId
+  // to force the database to do a Full Table Scan.
+}
