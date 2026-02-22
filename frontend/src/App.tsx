@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import LogPage from './pages/LogPage'
@@ -14,45 +15,88 @@ function NotFoundPage() {
 }
 
 function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
   return (
     <BrowserRouter>
       <main className="min-h-screen bg-zinc-950 text-zinc-100">
-        <nav className="fixed inset-y-0 left-0 flex w-64 flex-col border-r border-zinc-900 bg-black px-4 py-6 shadow-[0_0_36px_rgba(0,0,0,0.45)]">
-          <div className="px-3 pb-6 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-            Navigation
+        <nav
+          className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-zinc-900 bg-black py-6 shadow-[0_0_36px_rgba(0,0,0,0.45)] transition-all duration-200 ${
+            sidebarCollapsed ? 'w-20 px-2' : 'w-64 px-4'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            className="cursor-pointer absolute top-1/2 -right-2.5 flex h-20 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition hover:bg-zinc-800 hover:text-zinc-100"
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <i
+              className={`fa-solid fa-chevron-left text-[10px] leading-none transition-transform ${
+                sidebarCollapsed ? 'rotate-180' : ''
+              }`}
+            ></i>
+          </button>
+
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center pb-4' : 'px-3 pb-6'}`}>
+            {!sidebarCollapsed ? (
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Navigation
+              </div>
+            ) : null}
           </div>
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-blue-500/30 bg-blue-500/20 text-blue-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors ${
+                sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
+              } ${isActive ? 'border-blue-500/30 bg-blue-500/20 text-blue-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
+            title={sidebarCollapsed ? 'Dashboard' : undefined}
           >
-            <i className="fa-solid fa-circle-exclamation"></i>
-            Incidents
+            <span className="inline-flex h-5 w-5 items-center justify-center leading-none">
+              <i className="fa-solid fa-chart-column text-sm leading-none"></i>
+            </span>
+            {!sidebarCollapsed ? 'Dashboard' : null}
           </NavLink>
 
           <NavLink
             to="/traces"
             className={({ isActive }) =>
-              `mb-2 flex flex-row items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-emerald-500/30 bg-emerald-500/20 text-emerald-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors ${
+                sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
+              } ${isActive ? 'border-emerald-500/30 bg-emerald-500/20 text-emerald-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
+            title={sidebarCollapsed ? 'Traces' : undefined}
           >
-            <i className="fa-solid fa-chart-line"></i>
-            Traces
+            <span className="inline-flex h-5 w-5 items-center justify-center leading-none">
+              <i className="fa-solid fa-magnifying-glass-chart text-sm leading-none"></i>
+            </span>
+            {!sidebarCollapsed ? 'Traces' : null}
           </NavLink>
           
           <NavLink
             to="/logs"
             className={({ isActive }) =>
-              `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-violet-500/30 bg-violet-500/20 text-violet-300' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+              `mb-2 flex items-center rounded-md border py-2 text-sm font-medium transition-colors ${
+                sidebarCollapsed ? 'justify-center px-2' : 'gap-2 px-4'
+              } ${isActive ? 'border-violet-500/30 bg-violet-500/20 text-violet-300' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
+            title={sidebarCollapsed ? 'Logs' : undefined}
           >
-            <i className="fa-solid fa-scroll"></i>
-            Logs
+            <span className="inline-flex h-5 w-5 items-center justify-center leading-none">
+              <i className="fa-solid fa-scroll text-sm leading-none"></i>
+            </span>
+            {!sidebarCollapsed ? 'Logs' : null}
           </NavLink>
           
         </nav>
-        <div className="ml-64 h-screen overflow-y-scroll bg-zinc-950/70 px-8 py-12">
+        <div
+          className={`h-screen overflow-y-scroll bg-zinc-950/70 px-8 py-12 transition-all duration-200 ${
+            sidebarCollapsed ? 'ml-20' : 'ml-64'
+          }`}
+        >
           <Routes>
             <Route path="/traces" element={<Dashboard />} />
             <Route path="/" element={<Reports />} />

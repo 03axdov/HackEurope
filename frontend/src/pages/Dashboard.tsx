@@ -138,11 +138,102 @@ export default function Dashboard() {
     }
   }, [])
 
+  const taskDurationStats = Object.values(services)
+    .flatMap((traces) => traces)
+    .flatMap((trace) => trace.spans)
+    .reduce<Record<string, { total: number; count: number; max: number }>>((acc, span) => {
+      const key = span.operationName || 'Unknown operation'
+      const current = acc[key] ?? { total: 0, count: 0, max: 0 }
+      current.total += span.duration
+      current.count += 1
+      current.max = Math.max(current.max, span.duration)
+      acc[key] = current
+      return acc
+    }, {})
+
+  const topTaskDurations = Object.entries(taskDurationStats)
+    .map(([operationName, stats]) => ({
+      operationName,
+      avgDuration: Math.round(stats.total / Math.max(stats.count, 1)),
+      maxDuration: stats.max,
+      count: stats.count,
+    }))
+    .sort((a, b) => {
+      if (b.avgDuration !== a.avgDuration) return b.avgDuration - a.avgDuration
+      return a.operationName.localeCompare(b.operationName)
+    })
+    .slice(0, 8)
+
+  const topTaskDurationValues = topTaskDurations.flatMap((task) => [task.avgDuration, task.maxDuration])
+  const topTaskMinDuration = topTaskDurationValues.length ? Math.min(...topTaskDurationValues) : 0
+  const topTaskMaxDuration = topTaskDurationValues.length ? Math.max(...topTaskDurationValues) : 0
+
   return (
     <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-8 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">Overview</p>
       <h1 className="page-title mt-3 text-4xl font-extrabold tracking-tight text-zinc-50">Traces</h1>
       <div className="mt-4 h-px w-28 bg-linear-to-r from-emerald-400/80 to-transparent" />
+      {!loading ? (
+        <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-300/80">
+                Task Durations
+              </p>
+              <h2 className="text-lg font-semibold text-zinc-100">Top slow tasks (by average span duration)</h2>
+            </div>
+            <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400">
+              {topTaskDurations.length} shown
+            </span>
+          </div>
+
+          {topTaskDurations.length === 0 ? (
+            <p className="text-sm text-zinc-400">No span timing data available yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {topTaskDurations.map((task) => (
+                <div
+                  key={task.operationName}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="line-clamp-2 text-sm font-semibold text-emerald-200">{task.operationName}</p>
+                    <span className="shrink-0 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-[11px] text-zinc-400">
+                      {task.count}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
+                      <div className="uppercase tracking-wide text-zinc-500">Avg</div>
+                      <div
+                        className={`mt-1 font-medium ${getDurationColorClass(
+                          task.avgDuration,
+                          topTaskMinDuration,
+                          topTaskMaxDuration,
+                        )}`}
+                      >
+                        {formatDuration(task.avgDuration)}
+                      </div>
+                    </div>
+                    <div className="rounded border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
+                      <div className="uppercase tracking-wide text-zinc-500">Max</div>
+                      <div
+                        className={`mt-1 font-medium ${getDurationColorClass(
+                          task.maxDuration,
+                          topTaskMinDuration,
+                          topTaskMaxDuration,
+                        )}`}
+                      >
+                        {formatDuration(task.maxDuration)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
       {loading ? (
         <ul className="mt-5 space-y-3">
           {[0, 1, 2].map((idx) => (

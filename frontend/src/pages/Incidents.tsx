@@ -5,6 +5,43 @@ import { detect_incidents, get_incidents, get_pull_requests, merge_pull_request 
 import type { Incident } from '../types/Incident'
 import type { PullRequest } from '../types/PullRequest'
 
+const RESOLVED_INCIDENTS_LAST_MONTH = [
+  { day: 'Jan 24', bySeverity: { low: 1, medium: 0, high: 0, critical: 0, blocker: 0 } },
+  { day: 'Jan 26', bySeverity: { low: 0, medium: 0, high: 0, critical: 0, blocker: 0 } },
+  { day: 'Jan 28', bySeverity: { low: 1, medium: 1, high: 0, critical: 0, blocker: 0 } },
+  { day: 'Jan 30', bySeverity: { low: 0, medium: 1, high: 0, critical: 0, blocker: 0 } },
+  { day: 'Feb 01', bySeverity: { low: 1, medium: 1, high: 1, critical: 0, blocker: 0 } },
+  { day: 'Feb 03', bySeverity: { low: 0, medium: 1, high: 1, critical: 0, blocker: 0 } },
+  { day: 'Feb 05', bySeverity: { low: 1, medium: 1, high: 1, critical: 1, blocker: 0 } },
+  { day: 'Feb 07', bySeverity: { low: 1, medium: 0, high: 0, critical: 0, blocker: 0 } },
+  { day: 'Feb 09', bySeverity: { low: 0, medium: 1, high: 1, critical: 0, blocker: 0 } },
+  { day: 'Feb 11', bySeverity: { low: 1, medium: 2, high: 1, critical: 1, blocker: 0 } },
+  { day: 'Feb 13', bySeverity: { low: 1, medium: 1, high: 1, critical: 0, blocker: 0 } },
+  { day: 'Feb 15', bySeverity: { low: 0, medium: 1, high: 1, critical: 0, blocker: 0 } },
+  { day: 'Feb 17', bySeverity: { low: 1, medium: 1, high: 1, critical: 1, blocker: 0 } },
+  { day: 'Feb 19', bySeverity: { low: 0, medium: 1, high: 1, critical: 1, blocker: 0 } },
+  { day: 'Feb 21', bySeverity: { low: 1, medium: 2, high: 1, critical: 1, blocker: 1 } },
+]
+
+const SEVERITY_ORDER: Incident['severity'][] = ['low', 'medium', 'high', 'critical', 'blocker']
+
+function getSeverityChartColorClass(severity: Incident['severity']) {
+  switch (severity) {
+    case 'low':
+      return 'bg-emerald-400'
+    case 'medium':
+      return 'bg-yellow-400'
+    case 'high':
+      return 'bg-orange-400'
+    case 'critical':
+      return 'bg-rose-400'
+    case 'blocker':
+      return 'bg-red-500'
+    default:
+      return 'bg-zinc-400'
+  }
+}
+
 function getSeverityBadgeClass(severity: Incident['severity']) {
   switch (severity) {
     case 'low':
@@ -109,12 +146,23 @@ export default function Reports() {
     return () => window.clearTimeout(timeout)
   }, [statusMessage, error])
 
+  const maxResolvedCount = Math.max(
+    ...RESOLVED_INCIDENTS_LAST_MONTH.map((d) =>
+      SEVERITY_ORDER.reduce((sum, severity) => sum + (d.bySeverity[severity] ?? 0), 0),
+    ),
+    1,
+  )
+  const totalResolved = RESOLVED_INCIDENTS_LAST_MONTH.reduce(
+    (sum, d) => sum + SEVERITY_ORDER.reduce((inner, severity) => inner + (d.bySeverity[severity] ?? 0), 0),
+    0,
+  )
+
   return (
     <>
       <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-8 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400/80">Monitoring</p>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="page-title text-4xl font-extrabold tracking-tight text-zinc-50">Incidents</h1>
+          <h1 className="page-title text-4xl font-extrabold tracking-tight text-zinc-50">Dashboard</h1>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -167,6 +215,93 @@ export default function Reports() {
           </div>
         </div>
         <div className="mt-4 h-px w-28 bg-linear-to-r from-blue-400/80 to-transparent" />
+
+        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-300/80">
+                Resolved Incidents
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-zinc-100">Last 30 days</h2>
+            </div>
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-right">
+              <div className="text-[11px] uppercase tracking-[0.12em] text-blue-200/80">Total Resolved</div>
+              <div className="text-xl font-semibold text-blue-100">{totalResolved}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-15 items-end gap-2">
+            {RESOLVED_INCIDENTS_LAST_MONTH.map((point) => {
+              const totalForDay = SEVERITY_ORDER.reduce(
+                (sum, severity) => sum + (point.bySeverity[severity] ?? 0),
+                0,
+              )
+              const heightPct = (totalForDay / maxResolvedCount) * 100
+              return (
+                <div key={point.day} className="group/day relative flex min-w-0 flex-col items-center gap-2">
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-3 hidden w-52 -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/95 p-3 text-left shadow-[0_16px_40px_rgba(0,0,0,0.45)] group-hover/day:block">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-200">
+                        {point.day}
+                      </span>
+                      <span className="text-xs text-zinc-400">
+                        {totalForDay} total
+                      </span>
+                    </div>
+                    <div className="mt-2 h-px bg-zinc-800" />
+                    <ul className="mt-2 space-y-1.5">
+                      {SEVERITY_ORDER.map((severity) => (
+                        <li key={`${point.day}-tooltip-${severity}`} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="inline-flex items-center gap-2 text-zinc-300">
+                            <span className={`h-2.5 w-2.5 rounded-full ${getSeverityChartColorClass(severity)}`} />
+                            {formatSeverityLabel(severity)}
+                          </span>
+                          <span className="font-medium text-zinc-100">
+                            {point.bySeverity[severity] ?? 0}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <span className="text-[11px] text-zinc-500">{totalForDay}</span>
+                  <div className="flex h-32 w-full items-end rounded-md border border-zinc-800 bg-zinc-900/70 p-1">
+                    <div
+                      className="flex w-full flex-col justify-end overflow-hidden rounded-sm shadow-[0_0_14px_rgba(59,130,246,0.15)]"
+                      style={{ height: `${Math.max(heightPct, totalForDay > 0 ? 8 : 0)}%` }}
+                    >
+                      {[...SEVERITY_ORDER].reverse().map((severity) => {
+                        const value = point.bySeverity[severity] ?? 0
+                        if (value <= 0 || totalForDay <= 0) return null
+                        return (
+                          <div
+                            key={`${point.day}-${severity}`}
+                            className={`w-full ${getSeverityChartColorClass(severity)}`}
+                            style={{ height: `${(value / totalForDay) * 100}%` }}
+                            title={`${point.day}: ${formatSeverityLabel(severity)} ${value}`}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <span className="truncate text-[10px] uppercase tracking-[0.08em] text-zinc-500">
+                    {point.day}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {SEVERITY_ORDER.map((severity) => (
+              <span
+                key={severity}
+                className="inline-flex items-center gap-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300"
+              >
+                <span className={`h-2.5 w-2.5 rounded-full ${getSeverityChartColorClass(severity)}`} />
+                {formatSeverityLabel(severity)}
+              </span>
+            ))}
+          </div>
+        </div>
 
       {loading ? (
         <ul className="mt-5 space-y-3">

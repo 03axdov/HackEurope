@@ -69,7 +69,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
     queryset = Incident.objects.all().order_by("-id")
     serializer_class = IncidentSerializer
 
-    @action(detail=False, methods=["post"], url_path="detect")
+    @action(detail=False, methods=["get"], url_path="detect")
     def detect(self, request):
         try:
             traces = detect_incidents()
@@ -440,11 +440,21 @@ def detect_incidents():
                     level="warning",
                     context={"trace_id": trace_id, "pull_request_id": pull_request["id"], "error": str(exc)},
                 )
+
+            ai_title = str(incident_fields.get("title") or "").strip()
+            if ai_title and not ai_title.lower().startswith("for "):
+                log_event(
+                    "generate_incident_text",
+                    "AI returned incident title in unexpected format; using fallback title.",
+                    level="warning",
+                    context={"trace_id": trace_id, "pull_request_id": pull_request["id"], "title": ai_title},
+                )
+                ai_title = ""
  
             created_incident = Incident.objects.create(
                 pullRequest_id=pull_request["id"],
                 url=str(incident_data.get("httpTarget") or ""),
-                title=incident_fields.get("title") or f"For {http_target} caused by slow database queries",
+                title=ai_title or "For relevant page caused by slow database queries",
                 problemDescription=incident_fields.get("problemDescription") or (
                     f"Slow HTTP request detected for '{http_target}' in trace {trace_id}. "
                     f"Observed duration: {duration_micros / 1_000_000:.3f} seconds."
