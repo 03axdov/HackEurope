@@ -1,5 +1,5 @@
 from urllib.parse import urlparse
-from utils import _run_or_raise, _stdout
+from .utils import _run_or_raise, _stdout
 from pathlib import Path
 
 

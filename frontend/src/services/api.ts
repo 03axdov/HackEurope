@@ -1,5 +1,6 @@
 import type { Trace } from '../types/Trace'
 import type { PullRequest } from '../types/PullRequest'
+import type { Incident } from '../types/Incident'
 
 export async function get_services() {
   const response = await fetch('/jaeger-api/api/services')
@@ -39,14 +40,37 @@ export async function get_pull_requests(): Promise<PullRequest[]> {
   return Array.isArray(result) ? result : []
 }
 
-export async function create_suggested_pull_request(id: number) {
-  const response = await fetch(`/backend-api/pull-requests/${id}/create-pr/`, {
+
+export async function get_incidents(): Promise<Incident[]> {
+  const response = await fetch('/backend-api/incidents/')
+  if (!response.ok) {
+    throw new Error(`Failed to fetch incidents: ${response.status} ${response.statusText}`)
+  }
+
+  const result = (await response.json()) as Incident[]
+  return Array.isArray(result) ? result : []
+}
+
+export async function detect_incidents() {
+  const response = await fetch('/backend-api/incidents/detect/', {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to detect incidents: ${response.status} ${text}`)
+  }
+
+  return response.json()
+}
+
+export async function merge_pull_request(id: number) {
+  const response = await fetch(`/backend-api/pull-requests/${id}/merge-pr/`, {
     method: 'POST',
   })
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`Failed to create pull request: ${response.status} ${text}`)
+    throw new Error(`Failed to merge pull request: ${response.status} ${text}`)
   }
 
   return response.json()

@@ -15,3 +15,21 @@ class PullRequest(models.Model):
 
     def __str__(self) -> str:
         return f"{self.repo_owner}/{self.repo_name}#{self.id}: {self.title}"
+
+
+class Incident(models.Model):
+    pullRequest = models.ForeignKey(
+        PullRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="incidents",
+    )
+    title = models.CharField(max_length=255)
+    problemDescription = models.TextField()
+    solutionDescription = models.TextField()
+    timeImpact = models.FloatField()
+    impactCount = models.IntegerField()
+
+    def __str__(self) -> str:
+        return self.title

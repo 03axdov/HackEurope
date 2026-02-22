@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import shlex
 import shutil
@@ -7,8 +8,8 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-from utils import _create_pr_record_via_backend, _run_or_raise, _stdout, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
-from git_interactions import _has_uncommitted_changes, _ahead_commit_count, _owner_repo_from_url
+from .utils import _create_pr_record_via_backend, _run_or_raise, _stdout, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
+from .git_interactions import _has_uncommitted_changes, _ahead_commit_count, _owner_repo_from_url
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -142,6 +143,60 @@ def run_agent(task: str, workdir: Path, create_tests: bool = False) -> str:
 
     report = _stdout(out).strip()
     return report or out
+
+
+def generate_incident_fields(detection_prompt: str, pull_request_title: str, pull_request_description: str) -> dict:
+    """Use Claude to draft incident metadata from the detection prompt and suggested PR details."""
+
+    task = (
+        "You are generating fields for an incident record in a monitoring dashboard.\n"
+        "Given the incident-detection prompt and the suggested pull request title/description, "
+        "write concise, accurate incident metadata.\n"
+        "Output ONLY a valid JSON object with exactly these string keys: "
+        "title, problemDescription, solutionDescription.\n"
+        "Requirements:\n"
+        "- ASCII only.\n"
+        "- No markdown fences.\n"
+        "- title should be short and specific.\n"
+        "- problemDescription should describe the observed issue and impact.\n"
+        "- solutionDescription should summarize what the suggested PR changes/fixes.\n\n"
+        f"Incident detection prompt:\n{detection_prompt}\n\n"
+        f"Suggested PR title:\n{pull_request_title}\n\n"
+        f"Suggested PR description:\n{pull_request_description}\n"
+    )
+
+    timeout = int(os.getenv("CLAUDE_CODE_TIMEOUT", "1800"))
+    cmd = _claude_code_command(task)
+    out = sh(ROOT_DIR, *cmd, timeout=timeout)
+    if _exit_code(out) != 0:
+        raise RuntimeError(f"Claude incident field generation failed.\n{out}")
+
+    text = (_stdout(out).strip() or str(out).strip())
+
+    def _parse_json(candidate: str) -> dict:
+        data = json.loads(candidate)
+        if not isinstance(data, dict):
+            raise ValueError("Expected JSON object")
+        return data
+
+    try:
+        data = _parse_json(text)
+    except Exception:
+        match = re.search(r"\{[\s\S]*\}", text)
+        if not match:
+            raise RuntimeError(f"Could not parse JSON from Claude incident field output:\n{text}")
+        data = _parse_json(match.group(0))
+
+    result = {
+        "title": str(data.get("title", "")).strip(),
+        "problemDescription": str(data.get("problemDescription", "")).strip(),
+        "solutionDescription": str(data.get("solutionDescription", "")).strip(),
+    }
+    missing = [k for k, v in result.items() if not v]
+    if missing:
+        raise RuntimeError(f"Claude incident field output missing required values: {', '.join(missing)}")
+
+    return result
 
 
 # Just to debug

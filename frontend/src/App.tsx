@@ -2,7 +2,6 @@ import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import LogPage from './pages/LogPage'
 import Reports from './pages/Incidents'
-import PullRequests from './pages/PullRequests'
 
 
 function NotFoundPage() {
@@ -25,30 +24,23 @@ function App() {
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `mb-2 flex flex-row items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-emerald-500/30 bg-emerald-500/20 text-emerald-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
-            }
-          >
-            <i className="fa-solid fa-chart-line"></i>
-            Dashboard
-          </NavLink>
-          <NavLink
-            to="/pull-requests"
-            className={({ isActive }) =>
-              `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-sky-500/30 bg-sky-500/20 text-sky-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
-            }
-          >
-            <i className="fa-solid fa-code-pull-request"></i>
-            Pull Requests
-          </NavLink>
-          <NavLink
-            to="/reports"
-            className={({ isActive }) =>
               `mb-2 flex flex-row items-center gap-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-amber-500/30 bg-amber-500/20 text-amber-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
             }
           >
             <i className="fa-solid fa-circle-exclamation"></i>
             Incidents
           </NavLink>
+
+          <NavLink
+            to="/traces"
+            className={({ isActive }) =>
+              `mb-2 flex flex-row items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'border-emerald-500/30 bg-emerald-500/20 text-emerald-200' : 'border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-100'}`
+            }
+          >
+            <i className="fa-solid fa-chart-line"></i>
+            Traces
+          </NavLink>
+          
           <NavLink
             to="/logs"
             className={({ isActive }) =>
@@ -62,10 +54,9 @@ function App() {
         </nav>
         <div className="ml-64 h-screen overflow-y-scroll bg-zinc-950/70 px-8 py-12">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/reports" element={<Reports />} />
+            <Route path="/traces" element={<Dashboard />} />
+            <Route path="/" element={<Reports />} />
             <Route path="/logs" element={<LogPage />} />
-            <Route path="/pull-requests" element={<PullRequests />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
