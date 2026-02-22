@@ -398,7 +398,7 @@ def detect_incidents():
         )
         print("GENERATING PR")
         try:
-            pull_request = generate_pr("https://github.com/03axdov/HackEurope", prompt=prompt)
+            pull_request = generate_pr("https://github.com/didrikmunther/hackeurope-demo.git", prompt=prompt)
         except Exception as exc:
             log_event(
                 "generate_pr",

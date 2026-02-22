@@ -344,10 +344,10 @@ export default function Reports() {
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                               <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
-                                Time Impact: {incident.timeImpact.toFixed(2)}s
+                                {incident.timeImpact.toFixed(2)}s
                               </span>
                               <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
-                                Impact Count: {incident.impactCount}
+                                {incident.impactCount} {incident.impactCount === 1 ? 'instance' : 'instances'}
                               </span>
                               <span className="rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-emerald-200">
                                 Fix available
