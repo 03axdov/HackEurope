@@ -11,6 +11,30 @@ app.use(cors());
 wrapExpressApp(app);
 const port = 4000;
 
+app.get("/", async (_req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.create({
+      data: {
+        id: Math.floor(Math.random() * 1000000),
+        name: 'John Doe',
+        email: `john.doe${Math.floor(Math.random() * 1000000)}@example.com`,
+        posts: {
+          create: {
+            title: 'Post 1',
+            content: 'Content 1',
+          },
+        },
+      },
+      include: {
+        posts: true,
+      },
+    });
+    res.status(200).json(user);
+  } catch (e) {
+    res.status(500).json({ error: 500, details: e });
+  }
+});
+
 app.get("/matches", async (_req: Request, res: Response) => {
   const matches = await prisma.match.findMany({
     take: 100,

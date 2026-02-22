@@ -6,9 +6,24 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
+  posts Post[]
+}
+model Post {
+  id        Int     @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean @default(false)
+  author    User    @relation(fields: [authorId], references: [id])
+  authorId  Int
+}
+
 model AIModel {
   id           Int      @id @default(autoincrement())
-  name         String 
+  name         String
   provider     String   // e.g., "OpenAI", "Meta"
   version      String
   created_at   DateTime @default(now())
@@ -22,16 +37,16 @@ model AIModel {
 model Match {
   id           BigInt   @id @default(autoincrement())
   playedAt     DateTime @default(now())
-  
+
   // Foreign Keys
   modelAId     Int
   modelBId     Int
   winnerId     Int?     // Nullable in case of a draw (rare in RPS, but possible)
 
   // The "Heavy" Column
-  // This is the "Red Herring" trap. Storing full raw logs here makes 
+  // This is the "Red Herring" trap. Storing full raw logs here makes
   // "SELECT *" queries incredibly slow as the DB fetches large blobs.
-  rawLog       Json     
+  rawLog       Json
 
   // Game Data
   modelAMove   String   // "ROCK", "PAPER", "SCISSORS"
