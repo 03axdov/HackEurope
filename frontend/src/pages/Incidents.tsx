@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { delete_incident, detect_incidents, get_incidents, get_pull_requests, merge_pull_request } from '../services/api'
+import { delete_incident, detect_incidents, get_detection_runs, get_incidents, get_pull_requests, merge_pull_request } from '../services/api'
+import type { DetectionRun } from '../types/DetectionRun'
 import type { Incident } from '../types/Incident'
 import type { PullRequest } from '../types/PullRequest'
 
@@ -76,6 +77,7 @@ function formatImprovementPercent(percent: number) {
 
 export default function Reports() {
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [detectionRuns, setDetectionRuns] = useState<DetectionRun[]>([])
   const [pullRequestsById, setPullRequestsById] = useState<Record<number, PullRequest>>({})
   const [loading, setLoading] = useState(true)
   const [detecting, setDetecting] = useState(false)
@@ -92,16 +94,12 @@ export default function Reports() {
   const [fixOnly, setFixOnly] = useState(false)
   const [severityMenuOpen, setSeverityMenuOpen] = useState(false)
 
-  async function detectIncidents() {
-    setStatusMessage(null)
-    setError(null)
-    setDetecting(true)
+  async function refreshIncidentPageData({ markLoaded = false, surfaceError = false } = {}) {
     try {
-      const detectResult = await detect_incidents()
-
-      const [incidentResult, pullRequestResult] = await Promise.all([
+      const [incidentResult, pullRequestResult, detectionRunResult] = await Promise.all([
         get_incidents(),
         get_pull_requests(),
+        get_detection_runs(),
       ])
       const pullRequestMap = Object.fromEntries(
         pullRequestResult.map((pullRequest: PullRequest) => [pullRequest.id, pullRequest]),
@@ -109,6 +107,28 @@ export default function Reports() {
 
       setIncidents(incidentResult)
       setPullRequestsById(pullRequestMap)
+      setDetectionRuns(detectionRunResult)
+      if (surfaceError) {
+        setError(null)
+      }
+    } catch (e) {
+      if (surfaceError) {
+        setError(e instanceof Error ? e.message : 'Failed to refresh incidents')
+      }
+    } finally {
+      if (markLoaded) {
+        setLoading(false)
+      }
+    }
+  }
+
+  async function detectIncidents() {
+    setStatusMessage(null)
+    setError(null)
+    setDetecting(true)
+    try {
+      const detectResult = await detect_incidents()
+      await refreshIncidentPageData({ surfaceError: true })
       if ((detectResult?.count ?? 0) === 0) {
         setStatusMessage('No major inefficiencies were detected.')
       } else {
@@ -125,33 +145,22 @@ export default function Reports() {
     let cancelled = false
 
     async function loadIncidents() {
-      try {
-        const [incidentResult, pullRequestResult] = await Promise.all([
-          get_incidents(),
-          get_pull_requests(),
-        ])
-        const pullRequestMap = Object.fromEntries(
-          pullRequestResult.map((pullRequest: PullRequest) => [pullRequest.id, pullRequest]),
-        ) as Record<number, PullRequest>
-
-        if (!cancelled) {
-          setIncidents(incidentResult)
-          setPullRequestsById(pullRequestMap)
-          setError(null)
-          setLoading(false)
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load incidents')
-          setLoading(false)
-        }
-      }
+      if (cancelled) return
+      await refreshIncidentPageData({ markLoaded: true, surfaceError: true })
     }
 
     loadIncidents()
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void refreshIncidentPageData()
+    }, 30_000)
+
+    return () => window.clearInterval(intervalId)
   }, [])
 
   useEffect(() => {
@@ -188,6 +197,7 @@ export default function Reports() {
     0,
   )
   const approxImprovementPercent = totalResolved > 0 ? weightedImprovementPercentSum / totalResolved : 0
+  const latestDetectionRun = detectionRuns[0] ?? null
   const normalizedSearch = searchFilter.trim().toLowerCase()
   const filteredIncidents = incidents.filter((incident) => {
     if (severityFilter !== 'all' && incident.severity !== severityFilter) {
@@ -271,6 +281,39 @@ export default function Reports() {
           </div>
         </div>
         <div className="mt-4 h-px w-28 bg-linear-to-r from-blue-400/80 to-transparent" />
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+            {incidents.length} incidents
+          </span>
+          {latestDetectionRun ? (
+            <>
+              <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+                Latest run: {new Date(latestDetectionRun.date).toLocaleTimeString()}
+              </span>
+              <span
+                className={`rounded border px-2 py-1 uppercase tracking-[0.1em] ${
+                  latestDetectionRun.runType === 'automatic'
+                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                    : 'border-blue-500/25 bg-blue-500/10 text-blue-200'
+                }`}
+              >
+                {latestDetectionRun.runType}
+              </span>
+              <span
+                className={`rounded border px-2 py-1 uppercase tracking-[0.1em] ${
+                  latestDetectionRun.status === 'success'
+                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                    : 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                }`}
+              >
+                {latestDetectionRun.status}
+              </span>
+              <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+                {latestDetectionRun.incidentCount} incident{latestDetectionRun.incidentCount === 1 ? '' : 's'}
+              </span>
+            </>
+          ) : null}
+        </div>
 
         <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -96,3 +96,23 @@ class Log(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.source}:{self.step}] {self.message[:80]}"
+
+
+class DetectionRun(models.Model):
+    RUN_TYPE_CHOICES = (
+        ("manual", "Manual"),
+        ("automatic", "Automatic"),
+    )
+    STATUS_CHOICES = (
+        ("success", "Success"),
+        ("failure", "Failure"),
+    )
+
+    date = models.DateTimeField(auto_now_add=True, db_index=True)
+    runType = models.CharField(max_length=16, choices=RUN_TYPE_CHOICES, db_index=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="success", db_index=True)
+    errorMessage = models.TextField(blank=True, default="")
+    incidentCount = models.IntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"{self.runType}/{self.status} run @ {self.date.isoformat()}"

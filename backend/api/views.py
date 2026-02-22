@@ -15,8 +15,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from agent.agent import generate_pr, generate_incident_fields
 
-from .models import Incident, Log, PullRequest
-from .serializers import IncidentSerializer, LogSerializer, PullRequestSerializer
+from .models import DetectionRun, Incident, Log, PullRequest
+from .serializers import DetectionRunSerializer, IncidentSerializer, LogSerializer, PullRequestSerializer
 
 
 class PullRequestViewSet(viewsets.ModelViewSet):
@@ -71,8 +71,15 @@ class IncidentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="detect")
     def detect(self, request):
+        run_type = (request.data.get("runType") if hasattr(request, "data") else None) or "manual"
+        if run_type not in {"manual", "automatic"}:
+            return Response(
+                {"detail": "Invalid runType. Expected 'manual' or 'automatic'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
-            traces = detect_incidents()
+            traces, detection_run = run_detection_with_tracking(run_type=run_type)
         except Exception as exc:
             return Response(
                 {"detail": f"Failed to detect incidents: {exc}"},
@@ -80,7 +87,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
             )
 
         return Response(
-            {"data": traces, "count": len(traces)},
+            {"data": traces, "count": len(traces), "detectionRunId": detection_run.id},
             status=status.HTTP_200_OK,
         )
 
@@ -121,6 +128,55 @@ class LogViewSet(viewsets.ReadOnlyModelViewSet):
                 pass
 
         return qs
+
+
+class DetectionRunViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = DetectionRunSerializer
+
+    def get_queryset(self):
+        qs = DetectionRun.objects.all().order_by("-date", "-id")
+        params = self.request.query_params
+
+        run_type = params.get("runType")
+        status_param = params.get("status")
+        limit = params.get("limit")
+
+        if run_type:
+            qs = qs.filter(runType=run_type)
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        if limit:
+            try:
+                limit_int = max(1, min(int(limit), 500))
+                qs = qs[:limit_int]
+            except (TypeError, ValueError):
+                pass
+
+        return qs
+
+
+def run_detection_with_tracking(run_type: str = "manual"):
+    detection_run = DetectionRun.objects.create(
+        runType=run_type,
+        status="success",
+        errorMessage="",
+        incidentCount=0,
+    )
+    try:
+        traces = detect_incidents(runType=run_type)
+    except Exception as exc:
+        detection_run.status = "failure"
+        detection_run.errorMessage = str(exc)
+        detection_run.incidentCount = 0
+        detection_run.save(update_fields=["status", "errorMessage", "incidentCount"])
+        raise
+
+    detection_run.status = "success"
+    detection_run.errorMessage = ""
+    detection_run.incidentCount = len(traces) if hasattr(traces, "__len__") else 0
+    detection_run.save(update_fields=["status", "errorMessage", "incidentCount"])
+    return traces, detection_run
 
 
 def merge_pr(owner: str, repo: str, token: str, head: str, base: str):
@@ -202,7 +258,8 @@ def create_prompt_from_incident(incident):
 
 
 from collections import defaultdict
-def detect_incidents():
+
+def detect_incidents(runType: str = "manual"):
     run_id = uuid.uuid4().hex[:12]
 
     def log_event(step, message, *, level="info", context=None, incident=None, pull_request=None):

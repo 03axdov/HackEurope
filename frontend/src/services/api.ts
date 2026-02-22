@@ -2,6 +2,7 @@ import type { Trace } from '../types/Trace'
 import type { PullRequest } from '../types/PullRequest'
 import type { Incident } from '../types/Incident'
 import type { LogEntry } from '../types/Log'
+import type { DetectionRun } from '../types/DetectionRun'
 
 export async function get_services() {
   const response = await fetch('/jaeger-api/api/services')
@@ -84,6 +85,16 @@ export async function get_logs(): Promise<LogEntry[]> {
   }
 
   const result = (await response.json()) as LogEntry[]
+  return Array.isArray(result) ? result : []
+}
+
+export async function get_detection_runs(): Promise<DetectionRun[]> {
+  const response = await fetch('/backend-api/detection-runs/?limit=12')
+  if (!response.ok) {
+    throw new Error(`Failed to fetch detection runs: ${response.status} ${response.statusText}`)
+  }
+
+  const result = (await response.json()) as DetectionRun[]
   return Array.isArray(result) ? result : []
 }
 

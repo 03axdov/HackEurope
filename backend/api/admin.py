@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Incident, Log, PullRequest
+from .models import DetectionRun, Incident, Log, PullRequest
 
 
 @admin.register(PullRequest)
@@ -20,3 +20,10 @@ class LogAdmin(admin.ModelAdmin):
     list_display = ("id", "created_at", "run_id", "source", "step", "level", "incident", "pull_request")
     list_filter = ("source", "step", "level", "created_at")
     search_fields = ("run_id", "message")
+
+
+@admin.register(DetectionRun)
+class DetectionRunAdmin(admin.ModelAdmin):
+    list_display = ("id", "date", "runType", "status", "incidentCount")
+    list_filter = ("runType", "status", "date")
+    search_fields = ("errorMessage",)

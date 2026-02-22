@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { get_services, get_traces } from '../services/api'
+import { get_detection_runs, get_incidents, get_services, get_traces } from '../services/api'
+import type { DetectionRun } from '../types/DetectionRun'
+import type { Incident } from '../types/Incident'
 import type { Span, Trace } from '../types/Trace'
 
 type ServicesResponse = {
@@ -97,6 +99,8 @@ function getTraceRootStartTime(trace: Trace): number {
 
 export default function Dashboard() {
   const [services, setServices] = useState<Record<string, Trace[]>>({})
+  const [incidents, setIncidents] = useState<Incident[]>([])
+  const [detectionRuns, setDetectionRuns] = useState<DetectionRun[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -135,6 +139,35 @@ export default function Dashboard() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function refreshMonitoringData() {
+      try {
+        const [incidentResult, detectionRunResult] = await Promise.all([
+          get_incidents(),
+          get_detection_runs(),
+        ])
+        if (!cancelled) {
+          setIncidents(incidentResult)
+          setDetectionRuns(detectionRunResult)
+        }
+      } catch {
+        // Keep dashboard traces usable even if auxiliary polling fails.
+      }
+    }
+
+    void refreshMonitoringData()
+    const intervalId = window.setInterval(() => {
+      void refreshMonitoringData()
+    }, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [])
+
   const taskDurationStats = Object.values(services)
     .flatMap((traces) => traces)
     .flatMap((trace) => trace.spans)
@@ -160,12 +193,46 @@ export default function Dashboard() {
       return a.operationName.localeCompare(b.operationName)
     })
     .slice(0, 8)
+  const latestDetectionRun = detectionRuns[0] ?? null
 
   return (
     <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-8 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">Overview</p>
       <h1 className="page-title mt-3 text-4xl tracking-tight text-zinc-50">Traces</h1>
       <div className="mt-4 h-px w-28 bg-linear-to-r from-emerald-400/80 to-transparent" />
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+        <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+          {incidents.length} incidents tracked
+        </span>
+        {latestDetectionRun ? (
+          <>
+            <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+              Latest detection: {new Date(latestDetectionRun.date).toLocaleTimeString()}
+            </span>
+            <span
+              className={`rounded border px-2 py-1 uppercase tracking-[0.1em] ${
+                latestDetectionRun.runType === 'automatic'
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                  : 'border-blue-500/25 bg-blue-500/10 text-blue-200'
+              }`}
+            >
+              {latestDetectionRun.runType}
+            </span>
+            <span
+              className={`rounded border px-2 py-1 uppercase tracking-[0.1em] ${
+                latestDetectionRun.status === 'success'
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                  : 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+              }`}
+            >
+              {latestDetectionRun.status}
+            </span>
+            <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+              {latestDetectionRun.incidentCount} incident{latestDetectionRun.incidentCount === 1 ? '' : 's'}
+            </span>
+          </>
+        ) : null}
+      </div>
       {!loading ? (
         <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">

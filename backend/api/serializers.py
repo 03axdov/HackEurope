@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Incident, Log, PullRequest
+from .models import DetectionRun, Incident, Log, PullRequest
 
 
 class PullRequestSerializer(serializers.ModelSerializer):
@@ -52,5 +52,19 @@ class LogSerializer(serializers.ModelSerializer):
             "incident",
             "pull_request",
             "created_at",
+        ]
+        read_only_fields = fields
+
+
+class DetectionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DetectionRun
+        fields = [
+            "id",
+            "date",
+            "runType",
+            "status",
+            "incidentCount",
+            "errorMessage",
         ]
         read_only_fields = fields

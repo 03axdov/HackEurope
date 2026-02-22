@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { get_logs } from '../services/api'
+import { get_detection_runs, get_logs } from '../services/api'
+import type { DetectionRun } from '../types/DetectionRun'
 import type { LogEntry, LogLevel } from '../types/Log'
 
 const LEVEL_LABELS: Record<LogLevel | 'all', string> = {
@@ -51,6 +52,7 @@ function groupByRun(logs: LogEntry[]) {
 
 export default function LogPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [detectionRuns, setDetectionRuns] = useState<DetectionRun[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedLevel, setSelectedLevel] = useState<LogLevel | 'all'>('all')
@@ -60,9 +62,10 @@ export default function LogPage() {
 
     async function loadLogs() {
       try {
-        const result = await get_logs()
+        const [logResult, runResult] = await Promise.all([get_logs(), get_detection_runs()])
         if (!cancelled) {
-          setLogs(result)
+          setLogs(logResult)
+          setDetectionRuns(runResult)
           setError(null)
           setLoading(false)
         }
@@ -87,29 +90,6 @@ export default function LogPage() {
 
   const groupedRuns = useMemo(() => groupByRun(filteredLogs), [filteredLogs])
 
-  const runSummary = useMemo(
-    () =>
-      groupByRun(logs)
-        .map((group) => {
-          const infoCount = group.entries.filter((e) => e.level === 'info').length
-          const warningCount = group.entries.filter((e) => e.level === 'warning').length
-          const errorCount = group.entries.filter((e) => e.level === 'error').length
-          const total = group.entries.length
-
-          return {
-            runId: group.runId,
-            total,
-            infoCount,
-            warningCount,
-            errorCount,
-            startedAt: group.entries[0]?.created_at ?? '',
-            endedAt: group.entries[group.entries.length - 1]?.created_at ?? '',
-          }
-        })
-        .slice(0, 10),
-    [logs],
-  )
-
   const counts = useMemo(
     () => ({
       all: logs.length,
@@ -118,11 +98,6 @@ export default function LogPage() {
       error: logs.filter((l) => l.level === 'error').length,
     }),
     [logs],
-  )
-
-  const maxRunLogCount = useMemo(
-    () => Math.max(...runSummary.map((run) => run.total), 1),
-    [runSummary],
   )
 
   return (
@@ -156,93 +131,77 @@ export default function LogPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-300/80">
                 Run Overview
               </p>
-              <h2 className="text-lg font-semibold text-zinc-100">Recent detection runs</h2>
+              <h2 className="text-lg font-semibold text-zinc-100">Most recent detection runs</h2>
             </div>
             <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400">
-              {runSummary.length} runs
+              {detectionRuns.length} runs
             </span>
           </div>
 
-          {runSummary.length === 0 ? (
+          {detectionRuns.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-400">No run data available yet.</p>
           ) : (
-            <>
-              <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
-                {runSummary.map((run) => {
-                  const barHeightPct = (run.total / maxRunLogCount) * 100
-                  return (
-                    <div
-                      key={run.runId}
-                      className="group rounded-lg border border-zinc-800 bg-zinc-900/60 p-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-200">
-                              {run.runId}
-                            </span>
-                            <span className="text-xs text-zinc-500">{formatTimestamp(run.endedAt)}</span>
-                          </div>
-                          <div className="mt-2 text-sm text-zinc-300">
-                            {run.total} logs, {run.warningCount} warnings, {run.errorCount} errors
-                          </div>
-                        </div>
-                        <div className="flex h-16 w-12 items-end rounded-md border border-zinc-800 bg-zinc-950/80 p-1">
-                          <div
-                            className="w-full rounded-sm bg-linear-to-t from-violet-700 via-violet-500 to-fuchsia-300 shadow-[0_0_12px_rgba(168,85,247,0.25)]"
-                            style={{ height: `${Math.max(barHeightPct, run.total > 0 ? 8 : 0)}%` }}
-                          />
-                        </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {detectionRuns.map((run) => (
+                <div key={run.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-200">
+                          Run #{run.id}
+                        </span>
+                        <span
+                          className={`rounded border px-2 py-0.5 text-[11px] uppercase tracking-[0.12em] ${
+                            run.runType === 'manual'
+                              ? 'border-blue-500/25 bg-blue-500/10 text-blue-200'
+                              : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                          }`}
+                        >
+                          {run.runType}
+                        </span>
+                        <span
+                          className={`rounded border px-2 py-0.5 text-[11px] uppercase tracking-[0.12em] ${
+                            run.status === 'success'
+                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                              : 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                          }`}
+                        >
+                          {run.status}
+                        </span>
                       </div>
-
-                      <div className="mt-3">
-                        <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
-                          <span>Severity distribution</span>
-                          <span>{run.total} total</span>
-                        </div>
-                        <div className="flex h-2 overflow-hidden rounded-full border border-zinc-800 bg-zinc-950">
-                          {run.infoCount > 0 ? (
-                            <div
-                              className="bg-sky-400"
-                              style={{ width: `${(run.infoCount / run.total) * 100}%` }}
-                              title={`Info: ${run.infoCount}`}
-                            />
-                          ) : null}
-                          {run.warningCount > 0 ? (
-                            <div
-                              className="bg-amber-400"
-                              style={{ width: `${(run.warningCount / run.total) * 100}%` }}
-                              title={`Warnings: ${run.warningCount}`}
-                            />
-                          ) : null}
-                          {run.errorCount > 0 ? (
-                            <div
-                              className="bg-rose-400"
-                              style={{ width: `${(run.errorCount / run.total) * 100}%` }}
-                              title={`Errors: ${run.errorCount}`}
-                            />
-                          ) : null}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                          <span className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-zinc-300">
-                            <span className="h-2 w-2 rounded-full bg-sky-400" />
-                            Info {run.infoCount}
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-zinc-300">
-                            <span className="h-2 w-2 rounded-full bg-amber-400" />
-                            Warning {run.warningCount}
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-zinc-300">
-                            <span className="h-2 w-2 rounded-full bg-rose-400" />
-                            Error {run.errorCount}
-                          </span>
-                        </div>
+                      <p className="mt-2 text-sm text-zinc-300">{formatTimestamp(run.date)}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded border border-zinc-700 bg-zinc-950/70 px-2 py-1 text-zinc-300">
+                          {run.incidentCount} incident{run.incidentCount === 1 ? '' : 's'} encountered
+                        </span>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            </>
+                    <div
+                      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
+                        run.status === 'success'
+                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                          : 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+                      }`}
+                    >
+                      <i className={`fa-solid ${run.status === 'success' ? 'fa-check' : 'fa-triangle-exclamation'}`}></i>
+                    </div>
+                  </div>
+
+                  {run.status === 'failure' && run.errorMessage ? (
+                    <div className="mt-3 rounded-md border border-rose-500/20 bg-rose-950/20 p-2 text-xs text-rose-200">
+                      <div className="mb-1 font-semibold uppercase tracking-[0.12em] text-rose-300/80">
+                        Error
+                      </div>
+                      <p className="line-clamp-3 whitespace-pre-wrap break-words">{run.errorMessage}</p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-950/70 p-2 text-xs text-zinc-400">
+                      Detection run completed successfully with {run.incidentCount} incident{run.incidentCount === 1 ? '' : 's'}.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       ) : null}
