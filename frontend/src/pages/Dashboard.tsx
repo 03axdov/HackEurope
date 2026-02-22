@@ -25,19 +25,16 @@ function formatStartTime(startTimeEpoch: number): string {
   return new Date(tsMs).toISOString().replace('T', ' ').replace('Z', ' UTC')
 }
 
-function getDurationColorClass(durationMicros: number, minDuration: number, maxDuration: number): string {
-  const range = Math.max(1, maxDuration - minDuration)
-  const normalized = (durationMicros - minDuration) / range
-
-  if (normalized <= 0.1) return 'text-emerald-300'
-  if (normalized <= 0.2) return 'text-green-300'
-  if (normalized <= 0.35) return 'text-lime-300'
-  if (normalized <= 0.5) return 'text-yellow-300'
-  if (normalized <= 0.65) return 'text-amber-300'
-  if (normalized <= 0.8) return 'text-orange-300'
-  if (normalized <= 0.92) return 'text-red-300'
-  if (normalized <= 0.98) return 'text-red-400'
-  return 'text-red-500'
+function getAbsoluteDurationColorClass(durationMicros: number): string {
+  if (durationMicros < 1_000) return 'text-emerald-300' // <1ms
+  if (durationMicros < 10_000) return 'text-green-300' // <10ms
+  if (durationMicros < 100_000) return 'text-lime-300' // <100ms
+  if (durationMicros < 500_000) return 'text-yellow-300' // <500ms
+  if (durationMicros < 1_000_000) return 'text-amber-300' // <1s
+  if (durationMicros < 3_000_000) return 'text-orange-300' // <3s
+  if (durationMicros < 10_000_000) return 'text-red-300' // <10s
+  if (durationMicros < 30_000_000) return 'text-red-400' // <30s
+  return 'text-red-500' // >=30s
 }
 
 function getOperationTextColorClass(depth: number): string {
@@ -164,10 +161,6 @@ export default function Dashboard() {
     })
     .slice(0, 8)
 
-  const topTaskDurationValues = topTaskDurations.flatMap((task) => [task.avgDuration, task.maxDuration])
-  const topTaskMinDuration = topTaskDurationValues.length ? Math.min(...topTaskDurationValues) : 0
-  const topTaskMaxDuration = topTaskDurationValues.length ? Math.max(...topTaskDurationValues) : 0
-
   return (
     <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-8 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">Overview</p>
@@ -205,25 +198,13 @@ export default function Dashboard() {
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
                       <div className="uppercase tracking-wide text-zinc-500">Avg</div>
-                      <div
-                        className={`mt-1 font-medium ${getDurationColorClass(
-                          task.avgDuration,
-                          topTaskMinDuration,
-                          topTaskMaxDuration,
-                        )}`}
-                      >
+                      <div className={`mt-1 font-medium ${getAbsoluteDurationColorClass(task.avgDuration)}`}>
                         {formatDuration(task.avgDuration)}
                       </div>
                     </div>
                     <div className="rounded border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
                       <div className="uppercase tracking-wide text-zinc-500">Max</div>
-                      <div
-                        className={`mt-1 font-medium ${getDurationColorClass(
-                          task.maxDuration,
-                          topTaskMinDuration,
-                          topTaskMaxDuration,
-                        )}`}
-                      >
+                      <div className={`mt-1 font-medium ${getAbsoluteDurationColorClass(task.maxDuration)}`}>
                         {formatDuration(task.maxDuration)}
                       </div>
                     </div>
@@ -250,10 +231,6 @@ export default function Dashboard() {
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([serviceName, traces]) => (
           (() => {
-            const serviceSpanDurations = traces.flatMap((trace) => trace.spans.map((span) => span.duration))
-            const serviceMinDuration = serviceSpanDurations.length ? Math.min(...serviceSpanDurations) : 0
-            const serviceMaxDuration = serviceSpanDurations.length ? Math.max(...serviceSpanDurations) : 0
-
             return (
               <li key={serviceName} className="rounded-lg border border-zinc-800 bg-zinc-950/70 text-sm text-zinc-200">
                 <details className="group">
@@ -305,7 +282,7 @@ export default function Dashboard() {
                                   {depth > 0 ? <span className="mr-2 shrink-0 text-zinc-500">↳</span> : null}
                                   <span className="truncate">{span.operationName || 'Unknown operation'}</span>
                                 </div>
-                                <span className={`shrink-0 text-right text-xs ${getDurationColorClass(span.duration, serviceMinDuration, serviceMaxDuration)}`}>
+                                <span className={`shrink-0 text-right text-xs ${getAbsoluteDurationColorClass(span.duration)}`}>
                                   {formatDuration(span.duration)}
                                 </span>
                                 <span className="shrink-0 text-xs text-zinc-400">{formatStartTime(span.startTime)}</span>
