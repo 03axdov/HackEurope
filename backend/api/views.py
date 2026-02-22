@@ -394,8 +394,20 @@ def detect_incidents():
         },
     )
 
-    
+    deduplicated_incidents = {}
     for trace_id in incidents:
+        incident = incidents[trace_id]
+        slowCallOperation = incident.get("callOperations")[0]
+        deduplicated_incidents[slowCallOperation.get("callOperation").get("tag")] = {
+            "incident": incident,
+            "trace_id": trace_id,
+        }
+
+    for key in deduplicated_incidents:
+        incident_data = deduplicated_incidents[key]
+        incident = incident_data.get("incident")
+        trace_id = incident_data.get("trace_id")
+
         incident_data = incidents[trace_id]
         prompt = create_prompt_from_incident(incident_data)
         log_event(
@@ -405,7 +417,7 @@ def detect_incidents():
         )
         print("GENERATING PR")
         try:
-            pull_request = generate_pr("https://github.com/didrikmunther/hackeurope-demo.git", prompt=prompt)
+            pull_request = generate_pr(os.getenv("GITHUB_LINK"), prompt=prompt)
         except Exception as exc:
             log_event(
                 "generate_pr",
