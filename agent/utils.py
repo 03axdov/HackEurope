@@ -23,6 +23,26 @@ def sh(cwd: Path, *cmd: str, timeout: int = 120) -> str:
         return f"$ {' '.join(cmd)}\n(exit 127)\nSTDOUT:\n\nSTDERR:\n{e}"
 
 
+def _create_github_pr(owner: str, repo: str, token: str, title: str, body: str, head: str, base: str) -> dict:
+    """Create a real pull request on GitHub via the API and return the response JSON."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        json={"title": title, "body": body, "head": head, "base": base},
+        timeout=30,
+    )
+    if not response.ok:
+        raise RuntimeError(
+            f"GitHub PR creation failed ({response.status_code}): {response.text}"
+        )
+    return response.json()
+
+
 def _create_pr_record_via_backend(
     repo_url: str,
     owner: str,

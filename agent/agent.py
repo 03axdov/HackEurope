@@ -8,7 +8,7 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-from .utils import _create_pr_record_via_backend, _run_or_raise, _stdout, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
+from .utils import _create_github_pr, _create_pr_record_via_backend, _run_or_raise, _stdout, _on_rm_error, sh, _exit_code, _looks_like_confirmation_request
 from .git_interactions import _has_uncommitted_changes, _ahead_commit_count, _owner_repo_from_url
 
 
@@ -50,6 +50,19 @@ def _claude_code_command(task: str) -> list[str]:
     return parts
 
 
+def _inject_token_into_url(repo_url: str) -> str:
+    """Inject GITHUB_TOKEN into an HTTPS GitHub URL for authenticated git operations."""
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        return repo_url
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(repo_url)
+    if parsed.scheme in ("http", "https") and parsed.hostname and "github.com" in parsed.hostname:
+        authed = parsed._replace(netloc=f"{token}@{parsed.hostname}")
+        return urlunparse(authed)
+    return repo_url
+
+
 # Entry point
 def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
     run_id = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
@@ -59,8 +72,11 @@ def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
     base_branch = os.getenv("BASE_BRANCH", "main")
     branch = f"claude/fix-{run_id}"
 
+    # Use an authenticated URL for clone so that origin inherits it for push too.
+    clone_url = _inject_token_into_url(repo_url)
+
     try:
-        _run_or_raise(workdir, "git", "clone", repo_url, ".")
+        _run_or_raise(workdir, "git", "clone", clone_url, ".")
         _run_or_raise(workdir, "git", "checkout", base_branch)
         _run_or_raise(workdir, "git", "checkout", "-b", branch)
 
@@ -80,6 +96,28 @@ def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
 
         owner, repo = _owner_repo_from_url(repo_url)
         title = f"Claude Code updates ({run_id})"
+
+        # Create a real GitHub PR so it can be merged via the GitHub API later.
+        github_token = os.getenv("GITHUB_TOKEN", "").strip()
+        github_pr_url = None
+        if github_token:
+            try:
+                gh_pr = _create_github_pr(
+                    owner=owner,
+                    repo=repo,
+                    token=github_token,
+                    title=title,
+                    body=final_report,
+                    head=branch,
+                    base=base_branch,
+                )
+                github_pr_url = gh_pr.get("html_url")
+                print(f"Created GitHub PR: {github_pr_url}")
+            except Exception as e:
+                print(f"Warning: could not create GitHub PR: {e}")
+        else:
+            print("Warning: GITHUB_TOKEN not set; skipping GitHub PR creation.")
+
         try:
             pr = _create_pr_record_via_backend(
                 repo_url=repo_url,
@@ -91,10 +129,10 @@ def generate_pr(repo_url: str, prompt: str, create_tests: bool = False):
                 body=final_report,
             )
         except Exception as e:
-            manual_url = f"https://github.com/{owner}/{repo}/compare/{base_branch}...{branch}?expand=1"
+            manual_url = github_pr_url or f"https://github.com/{owner}/{repo}/compare/{base_branch}...{branch}?expand=1"
             raise RuntimeError(
                 f"Failed to create PullRequest record via backend API: {e}\n"
-                f"Compare URL: {manual_url}"
+                f"PR URL: {manual_url}"
             ) from e
         print(f"Created PullRequest record via backend API: id={pr.get('id')}")
         return pr
