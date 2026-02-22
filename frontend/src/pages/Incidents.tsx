@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { detect_incidents, get_incidents, get_pull_requests, merge_pull_request } from '../services/api'
+import { delete_incident, detect_incidents, get_incidents, get_pull_requests, merge_pull_request } from '../services/api'
 import type { Incident } from '../types/Incident'
 import type { PullRequest } from '../types/PullRequest'
 
@@ -84,14 +84,20 @@ export default function Reports() {
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [mergingPrId, setMergingPrId] = useState<number | null>(null)
+  const [rejectingIncidentId, setRejectingIncidentId] = useState<number | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<Incident | null>(null)
+  const [confirmRejectTarget, setConfirmRejectTarget] = useState<Incident | null>(null)
+  const [severityFilter, setSeverityFilter] = useState<'all' | Incident['severity']>('all')
+  const [searchFilter, setSearchFilter] = useState('')
+  const [fixOnly, setFixOnly] = useState(false)
+  const [severityMenuOpen, setSeverityMenuOpen] = useState(false)
 
   async function detectIncidents() {
     setStatusMessage(null)
     setError(null)
     setDetecting(true)
     try {
-      await detect_incidents()
+      const detectResult = await detect_incidents()
 
       const [incidentResult, pullRequestResult] = await Promise.all([
         get_incidents(),
@@ -103,7 +109,11 @@ export default function Reports() {
 
       setIncidents(incidentResult)
       setPullRequestsById(pullRequestMap)
-      setStatusMessage('Incident detection completed.')
+      if ((detectResult?.count ?? 0) === 0) {
+        setStatusMessage('No major inefficiencies were detected.')
+      } else {
+        setStatusMessage('Incident detection completed.')
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to detect incidents')
     } finally {
@@ -152,7 +162,7 @@ export default function Reports() {
     const timeout = window.setTimeout(() => {
       setStatusMessage(null)
       setError(null)
-    }, 4500)
+    }, 7500)
 
     return () => window.clearTimeout(timeout)
   }, [statusMessage, error])
@@ -178,6 +188,30 @@ export default function Reports() {
     0,
   )
   const approxImprovementPercent = totalResolved > 0 ? weightedImprovementPercentSum / totalResolved : 0
+  const normalizedSearch = searchFilter.trim().toLowerCase()
+  const filteredIncidents = incidents.filter((incident) => {
+    if (severityFilter !== 'all' && incident.severity !== severityFilter) {
+      return false
+    }
+    if (fixOnly && !incident.pullRequest) {
+      return false
+    }
+    if (!normalizedSearch) {
+      return true
+    }
+
+    const haystack = [
+      incident.title,
+      incident.url,
+      incident.problemDescription,
+      incident.solutionDescription,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+    return haystack.includes(normalizedSearch)
+  })
 
   return (
     <>
@@ -335,6 +369,118 @@ export default function Reports() {
           </div>
         </div>
 
+        <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-300/80">Filters</p>
+              <p className="text-sm text-zinc-400">Refine the incident list below.</p>
+            </div>
+            <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300">
+              {filteredIncidents.length} of {incidents.length} incidents
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]">
+            <label className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2">
+              <i className="fa-solid fa-magnifying-glass text-xs text-zinc-500"></i>
+              <input
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Search title, URL, or descriptions..."
+                className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-500"
+              />
+            </label>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSeverityMenuOpen((prev) => !prev)}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/80"
+                aria-haspopup="listbox"
+                aria-expanded={severityMenuOpen}
+              >
+                <i className="fa-solid fa-filter text-xs text-zinc-500"></i>
+                <span className="flex-1 text-left">
+                  {severityFilter === 'all' ? 'All severities' : formatSeverityLabel(severityFilter)}
+                </span>
+                <i
+                  className={`fa-solid fa-chevron-down text-xs text-zinc-500 transition-transform ${
+                    severityMenuOpen ? 'rotate-180' : ''
+                  }`}
+                ></i>
+              </button>
+
+              {severityMenuOpen ? (
+                <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-[0_18px_40px_rgba(0,0,0,0.5)]">
+                  <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                    Severity
+                  </div>
+                  <ul className="p-1" role="listbox">
+                    {(['all', ...SEVERITY_ORDER] as const).map((value) => {
+                      const isActive = severityFilter === value
+                      const label = value === 'all' ? 'All severities' : formatSeverityLabel(value)
+                      return (
+                        <li key={value}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSeverityFilter(value)
+                              setSeverityMenuOpen(false)
+                            }}
+                            className={`flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-sm transition ${
+                              isActive
+                                ? 'bg-blue-500/15 text-blue-200'
+                                : 'text-zinc-200 hover:bg-zinc-900'
+                            }`}
+                            role="option"
+                            aria-selected={isActive}
+                          >
+                            <span className="flex items-center gap-2">
+                              {value !== 'all' ? (
+                                <span
+                                  className={`h-2.5 w-2.5 rounded-full ${
+                                    value === 'low'
+                                      ? 'bg-emerald-400'
+                                      : value === 'medium'
+                                        ? 'bg-yellow-400'
+                                        : value === 'high'
+                                          ? 'bg-orange-400'
+                                          : value === 'critical'
+                                            ? 'bg-rose-400'
+                                            : 'bg-red-500'
+                                  }`}
+                                />
+                              ) : (
+                                <span className="h-2.5 w-2.5 rounded-full bg-zinc-500" />
+                              )}
+                              {label}
+                            </span>
+                            {isActive ? <i className="fa-solid fa-check text-xs text-blue-300"></i> : null}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setFixOnly((prev) => !prev)}
+              className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                fixOnly
+                  ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200'
+                  : 'border-zinc-800 bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800'
+              }`}
+              aria-pressed={fixOnly}
+            >
+              <i className="fa-solid fa-wrench text-xs"></i>
+              Fix available only
+            </button>
+          </div>
+        </div>
+
       {loading ? (
         <ul className="mt-5 space-y-3">
           {[0, 1, 2].map((idx) => (
@@ -348,12 +494,12 @@ export default function Reports() {
 
         {!loading ? (
           <ul className="mt-5 space-y-3">
-            {incidents.length === 0 ? (
+            {filteredIncidents.length === 0 ? (
               <li className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-zinc-400">
-                No incidents found.
+                {incidents.length === 0 ? 'No incidents found.' : 'No incidents match the current filters.'}
               </li>
             ) : (
-              [...incidents]
+              [...filteredIncidents]
                 .sort((a, b) => b.id - a.id)
                 .map((incident) => (
                   <li key={incident.id} className="rounded-lg border border-zinc-800 bg-zinc-950/70">
@@ -443,15 +589,26 @@ export default function Reports() {
 
                         <div className="mt-3 flex flex-wrap gap-3 text-xs text-zinc-400">
                           {incident.pullRequest ? (
-                            <button
-                              type="button"
-                              disabled={mergingPrId === incident.pullRequest}
-                              onClick={() => setConfirmTarget(incident)}
-                              className="cursor-pointer flex flex-row items-center gap-2 rounded border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-sm font-medium text-blue-200 hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <i className="fa-solid fa-code-pull-request"></i>
-                              {mergingPrId === incident.pullRequest ? 'Creating...' : 'Create PR'}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                disabled={mergingPrId === incident.pullRequest}
+                                onClick={() => setConfirmTarget(incident)}
+                                className="cursor-pointer flex flex-row items-center gap-2 rounded border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-sm font-medium text-blue-200 hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <i className="fa-solid fa-code-pull-request"></i>
+                                {mergingPrId === incident.pullRequest ? 'Creating...' : 'Create PR'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={rejectingIncidentId === incident.id}
+                                onClick={() => setConfirmRejectTarget(incident)}
+                                className="cursor-pointer flex flex-row items-center gap-2 rounded border border-rose-500/35 bg-rose-500/15 px-3 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                                {rejectingIncidentId === incident.id ? 'Rejecting...' : 'Reject Fix'}
+                              </button>
+                            </>
                           ) : (
                             <span className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-400">
                               No linked PR
@@ -569,6 +726,51 @@ export default function Reports() {
               >
                 <i className="fa-solid fa-code-pull-request"></i>
                 {mergingPrId === confirmTarget.pullRequest ? 'Creating...' : 'Create PR'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {confirmRejectTarget ? (
+        <div onClick={() => setConfirmRejectTarget(null)} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-400/80">Confirm Action</p>
+            <h2 className="mt-2 text-xl font-semibold text-zinc-100">Reject Suggested Fix?</h2>
+            <p className="mt-3 text-sm text-zinc-300">
+              This will remove incident <span className="font-semibold text-zinc-100">#{confirmRejectTarget.id}</span> from the dashboard.
+            </p>
+            <p className="mt-2 truncate text-sm text-zinc-400">{confirmRejectTarget.title}</p>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRejectTarget(null)}
+                className="cursor-pointer rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={rejectingIncidentId === confirmRejectTarget.id}
+                onClick={async () => {
+                  setStatusMessage(null)
+                  setError(null)
+                  setRejectingIncidentId(confirmRejectTarget.id)
+                  try {
+                    await delete_incident(confirmRejectTarget.id)
+                    setIncidents((prev) => prev.filter((incident) => incident.id !== confirmRejectTarget.id))
+                    setStatusMessage(`Rejected suggested fix for incident #${confirmRejectTarget.id}.`)
+                    setConfirmRejectTarget(null)
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Failed to reject suggested fix')
+                  } finally {
+                    setRejectingIncidentId(null)
+                  }
+                }}
+                className="flex flex-row items-center cursor-pointer rounded border border-rose-500/35 bg-rose-500/15 px-3 py-1.5 text-sm font-medium text-rose-200 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <i className="fa-solid fa-trash"></i>
+                {rejectingIncidentId === confirmRejectTarget.id ? 'Rejecting...' : 'Reject Fix'}
               </button>
             </div>
           </div>

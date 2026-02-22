@@ -40,7 +40,7 @@ function App() {
           </button>
 
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center pb-4' : 'px-3 pb-6'}`}>
-            <div className="flex flex-row gap-2 items-center text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <div className="flex flex-row gap-2 items-center text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">
               <img className="h-5 w-5 shrink-0" src="images/logo.webp" />
               {!sidebarCollapsed ? (
                 <span className="bg-linear-to-r from-blue-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">

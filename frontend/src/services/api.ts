@@ -61,7 +61,7 @@ export async function detect_incidents() {
     throw new Error(`Failed to detect incidents: ${response.status} ${text}`)
   }
 
-  return response.json()
+  return response.json() as Promise<{ data: Record<string, unknown>; count: number }>
 }
 
 export async function merge_pull_request(id: number) {
@@ -85,4 +85,15 @@ export async function get_logs(): Promise<LogEntry[]> {
 
   const result = (await response.json()) as LogEntry[]
   return Array.isArray(result) ? result : []
+}
+
+export async function delete_incident(id: number) {
+  const response = await fetch(`/backend-api/incidents/${id}/`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to delete incident: ${response.status} ${text}`)
+  }
 }

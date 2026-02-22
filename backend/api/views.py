@@ -292,6 +292,7 @@ def detect_incidents():
     log_event("fetch_traces", "Completed Jaeger trace fetch for all services.", context={"total_trace_count": len(all_traces)})
 
     incidents = {}
+    created_incident_candidates = {}
     skipped_missing_structure = 0
     skipped_fast = 0
     for trace in all_traces:
@@ -477,9 +478,10 @@ def detect_incidents():
                     "http_target": http_target,
                     "duration_micros": duration_micros,
                  },
-                 incident=created_incident,
+                incident=created_incident,
                 pull_request=linked_pull_request,
              )
+            created_incident_candidates[trace_id] = incident_data
         else:
            log_event(
                "generate_pr",
@@ -488,6 +490,13 @@ def detect_incidents():
                context={"trace_id": trace_id},
            )
     
-    log_event("complete", "Incident detection run completed.", context={"created_incident_candidates": len(incidents)})
+    log_event(
+        "complete",
+        "Incident detection run completed.",
+        context={
+            "candidate_count": len(incidents),
+            "created_incident_candidates": len(created_incident_candidates),
+        },
+    )
 
-    return incidents
+    return created_incident_candidates
